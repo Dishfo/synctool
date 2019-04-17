@@ -1,0 +1,779 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="5399cb4f-91dd-467c-a127-bccfc33129a2" name="Default Changelist" comment="" />
+    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CoverageDataManager">
+    <SUITE FILE_PATH="coverage/syncfolders$TestFs_in_syncfolders_fs.out" NAME="TestFs in syncfolders/fs Coverage Results" MODIFIED="1554613576624" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="GoCoverage" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" />
+  </component>
+  <component name="DatabaseView">
+    <option name="SHOW_INTERMEDIATE" value="true" />
+    <option name="GROUP_DATA_SOURCES" value="true" />
+    <option name="GROUP_SCHEMA" value="true" />
+    <option name="GROUP_CONTENTS" value="false" />
+    <option name="SORT_POSITIONED" value="false" />
+    <option name="SHOW_EMPTY_GROUPS" value="false" />
+    <option name="AUTO_SCROLL_FROM_SOURCE" value="false" />
+    <option name="HIDDEN_KINDS">
+      <set />
+    </option>
+    <expand />
+    <select />
+  </component>
+  <component name="FavoritesManager">
+    <favorites_list name="syncfolders" />
+  </component>
+  <component name="FileEditorManager">
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/syncfile/synctranscation.go">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="9330">
+              <caret line="640" selection-start-line="640" selection-end-line="640" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/syncfile/sync_test.go">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="225">
+              <caret line="19" column="9" selection-start-line="19" selection-start-column="9" selection-end-line="19" selection-end-column="9" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/syncfile/sync.go">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="1650">
+              <caret line="117" column="17" selection-start-line="117" selection-start-column="17" selection-end-line="117" selection-end-column="17" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/fs/filesystem.go">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="510">
+              <caret line="390" column="32" selection-start-line="390" selection-start-column="31" selection-end-line="390" selection-end-column="32" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Go File" />
+      </list>
+    </option>
+  </component>
+  <component name="FindInProjectRecents">
+    <findStrings>
+      <find>Comm</find>
+      <find>rows</find>
+      <find>GETTx</find>
+      <find>gettx</find>
+      <find>is</find>
+    </findStrings>
+  </component>
+  <component name="GOROOT" path="/usr/local/go" />
+  <component name="IdeDocumentHistory">
+    <option name="CHANGED_PATHS">
+      <list>
+        <option value="$PROJECT_DIR$/main.go" />
+        <option value="$PROJECT_DIR$/../sync/syncfile/sync.go" />
+        <option value="$PROJECT_DIR$/watcher.go" />
+        <option value="$PROJECT_DIR$/watcher/eventcollection.go" />
+        <option value="$PROJECT_DIR$/web/main.go" />
+        <option value="$PROJECT_DIR$/node/id.go" />
+        <option value="$PROJECT_DIR$/watcher/watcher_test.go" />
+        <option value="$PROJECT_DIR$/node/device.go" />
+        <option value="$PROJECT_DIR$/node/lz4.go" />
+        <option value="$PROJECT_DIR$/main/config.go" />
+        <option value="$PROJECT_DIR$/fs/eventset.go" />
+        <option value="$PROJECT_DIR$/watcher/watcher.go" />
+        <option value="$PROJECT_DIR$/fs/indexSeq.go" />
+        <option value="$PROJECT_DIR$/sync.go" />
+        <option value="$PROJECT_DIR$/syncfile/notify.go" />
+        <option value="$PROJECT_DIR$/node/parse.go" />
+        <option value="$PROJECT_DIR$/node/io.go" />
+        <option value="$PROJECT_DIR$/node/neterror.go" />
+        <option value="$PROJECT_DIR$/node/node_test.go" />
+        <option value="$PROJECT_DIR$/node/node.go" />
+        <option value="$PROJECT_DIR$/node/connection.go" />
+        <option value="$PROJECT_DIR$/bep/bep.pb.go" />
+        <option value="$PROJECT_DIR$/syncfile/timertask.go" />
+        <option value="$PROJECT_DIR$/fs/fileinfo.go" />
+        <option value="$PROJECT_DIR$/main/main.go" />
+        <option value="$PROJECT_DIR$/main/views.go" />
+        <option value="$PROJECT_DIR$/main/router.go" />
+        <option value="$PROJECT_DIR$/syncfile/devices.go" />
+        <option value="$PROJECT_DIR$/main/controller.go" />
+        <option value="$PROJECT_DIR$/main/sync.cfg" />
+        <option value="$PROJECT_DIR$/syncfile/io.go" />
+        <option value="$PROJECT_DIR$/syncfile/folderopt.go" />
+        <option value="$PROJECT_DIR$/fs/storage.go" />
+        <option value="$PROJECT_DIR$/syncfile/storage.go" />
+        <option value="$PROJECT_DIR$/node/communication.go" />
+        <option value="$PROJECT_DIR$/fs/fs_test.go" />
+        <option value="$PROJECT_DIR$/syncfile/intset.go" />
+        <option value="$PROJECT_DIR$/syncfile/sync_test.go" />
+        <option value="$PROJECT_DIR$/syncfile/sync.go" />
+        <option value="$PROJECT_DIR$/syncfile/sync.go" />
+        <option value="$PROJECT_DIR$/syncfile/synctranscation.go" />
+        <option value="$PROJECT_DIR$/fs/filesystem.go" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectFrameBounds">
+    <option name="y" value="29" />
+    <option name="width" value="960" />
+    <option name="height" value="1051" />
+  </component>
+  <component name="ProjectView">
+    <navigator proportions="" version="1">
+      <foldersAlwaysOnTop value="true" />
+    </navigator>
+    <panes>
+      <pane id="ProjectPane">
+        <subPane>
+          <expand>
+            <path>
+              <item name="syncfolders" type="b2602c69:ProjectViewProjectNode" />
+              <item name="syncfolders" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="syncfolders" type="b2602c69:ProjectViewProjectNode" />
+              <item name="syncfolders" type="462c0819:PsiDirectoryNode" />
+              <item name="bep" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="syncfolders" type="b2602c69:ProjectViewProjectNode" />
+              <item name="syncfolders" type="462c0819:PsiDirectoryNode" />
+              <item name="fs" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="syncfolders" type="b2602c69:ProjectViewProjectNode" />
+              <item name="syncfolders" type="462c0819:PsiDirectoryNode" />
+              <item name="main" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="syncfolders" type="b2602c69:ProjectViewProjectNode" />
+              <item name="syncfolders" type="462c0819:PsiDirectoryNode" />
+              <item name="node" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="syncfolders" type="b2602c69:ProjectViewProjectNode" />
+              <item name="syncfolders" type="462c0819:PsiDirectoryNode" />
+              <item name="syncfile" type="462c0819:PsiDirectoryNode" />
+            </path>
+          </expand>
+          <select />
+        </subPane>
+      </pane>
+      <pane id="Scope" />
+    </panes>
+  </component>
+  <component name="PropertiesComponent">
+    <property name="DefaultGoTemplateProperty" value="Go File" />
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="editor.config.ad.shown" value="true" />
+    <property name="go.gopath.indexing.explicitly.defined" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../sleuth_echo_server" />
+    <property name="nodejs_interpreter_path.stuck_in_default_project" value="undefined stuck path" />
+    <property name="nodejs_npm_path_reset_for_default_project" value="true" />
+    <property name="nodejs_package_manager_path" value="npm" />
+    <property name="settings.editor.selected.configurable" value="preferences.lookFeel" />
+  </component>
+  <component name="RunDashboard">
+    <option name="ruleStates">
+      <list>
+        <RuleState>
+          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
+        </RuleState>
+        <RuleState>
+          <option name="name" value="StatusDashboardGroupingRule" />
+        </RuleState>
+      </list>
+    </option>
+  </component>
+  <component name="RunManager" selected="Go Test.TestWordCount in syncfolders/fs">
+    <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
+      <module name="syncfolders" />
+      <working_directory value="$PROJECT_DIR$/" />
+      <go_parameters value="-i" />
+      <kind value="FILE" />
+      <filePath value="$PROJECT_DIR$/" />
+      <package value="sync1.1" />
+      <directory value="$PROJECT_DIR$/" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build syncfolders/main main.go" type="GoApplicationRunConfiguration" factoryName="Go Application">
+      <module name="syncfolders" />
+      <working_directory value="$PROJECT_DIR$/main" />
+      <go_parameters value="-i" />
+      <parameters value="-cfile sync.cfg" />
+      <kind value="PACKAGE" />
+      <filePath value="$PROJECT_DIR$/|$PROJECT_DIR$/main/main.go|$PROJECT_DIR$/main/main.go|$PROJECT_DIR$/main/main.go" />
+      <package value="syncfolders/main" />
+      <directory value="$PROJECT_DIR$/" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestFs in syncfolders/fs" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="syncfolders" />
+      <working_directory value="$PROJECT_DIR$/fs" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="syncfolders/fs" />
+      <directory value="$PROJECT_DIR$/" />
+      <filePath value="$PROJECT_DIR$/" />
+      <pattern value="^TestFs$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestMemorySql in syncfolders/node" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="syncfolders" />
+      <working_directory value="$PROJECT_DIR$/node" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="syncfolders/node" />
+      <directory value="$PROJECT_DIR$/" />
+      <filePath value="$PROJECT_DIR$/" />
+      <pattern value="^TestMemorySql$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestStorage in syncfolders/syncfile" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="syncfolders" />
+      <working_directory value="$PROJECT_DIR$/syncfile" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="syncfolders/syncfile" />
+      <directory value="$PROJECT_DIR$/" />
+      <filePath value="$PROJECT_DIR$/" />
+      <pattern value="^TestStorage$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestTaskManger in syncfolders/syncfile" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="syncfolders" />
+      <working_directory value="$PROJECT_DIR$/syncfile" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="syncfolders/syncfile" />
+      <directory value="$PROJECT_DIR$/" />
+      <filePath value="$PROJECT_DIR$/" />
+      <pattern value="^TestTaskManger$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestWordCount in syncfolders/fs" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="syncfolders" />
+      <working_directory value="$PROJECT_DIR$/fs" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="syncfolders/fs" />
+      <directory value="$PROJECT_DIR$/" />
+      <filePath value="$PROJECT_DIR$/" />
+      <pattern value="^TestWordCount$" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
+      <module name="syncfolders" />
+      <working_directory value="$PROJECT_DIR$/" />
+      <go_parameters value="-i" />
+      <framework value="gotest" />
+      <kind value="DIRECTORY" />
+      <package value="sync1.1" />
+      <directory value="$PROJECT_DIR$/" />
+      <filePath value="$PROJECT_DIR$/" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Go Build.go build syncfolders/main main.go" />
+      <item itemvalue="Go Test.TestFs in syncfolders/fs" />
+      <item itemvalue="Go Test.TestMemorySql in syncfolders/node" />
+      <item itemvalue="Go Test.TestStorage in syncfolders/syncfile" />
+      <item itemvalue="Go Test.TestTaskManger in syncfolders/syncfile" />
+      <item itemvalue="Go Test.TestWordCount in syncfolders/fs" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Go Test.TestWordCount in syncfolders/fs" />
+        <item itemvalue="Go Test.TestFs in syncfolders/fs" />
+        <item itemvalue="Go Test.TestTaskManger in syncfolders/syncfile" />
+        <item itemvalue="Go Test.TestStorage in syncfolders/syncfile" />
+        <item itemvalue="Go Test.TestMemorySql in syncfolders/node" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="TestHistory">
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 08m 34s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 08m 38s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 08m 49s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 08m 57s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 09m 02s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 09m 07s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 09m 10s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 09m 17s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 10m 03s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+    <history-entry file="TestWordCount_in_syncfolders_fs - 2019.04.14 at 22h 10m 16s.xml">
+      <configuration name="TestWordCount in syncfolders/fs" configurationId="GoTestRunConfiguration" />
+    </history-entry>
+  </component>
+  <component name="TodoView">
+    <todo-panel id="selected-file">
+      <is-autoscroll-to-source value="true" />
+    </todo-panel>
+    <todo-panel id="all">
+      <are-packages-shown value="true" />
+      <is-autoscroll-to-source value="true" />
+    </todo-panel>
+  </component>
+  <component name="ToolWindowManager">
+    <frame x="0" y="29" width="960" height="1051" extended-state="0" />
+    <layout>
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.30064654" visible="true" weight="0.20434782" />
+      <window_info id="Structure" order="1" sideWeight="0.69935346" side_tool="true" weight="0.34347826" />
+      <window_info id="Favorites" order="2" sideWeight="0.50850075" side_tool="true" weight="0.25108695" />
+      <window_info anchor="bottom" id="Message" order="0" />
+      <window_info anchor="bottom" id="Find" order="1" />
+      <window_info anchor="bottom" id="Run" order="2" weight="0.34913793" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.39655173" />
+      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
+      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
+      <window_info active="true" anchor="bottom" id="TODO" order="6" visible="true" weight="0.3275862" />
+      <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Version Control" order="8" />
+      <window_info anchor="bottom" id="Database Changes" order="9" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Statistic" order="10" weight="0.28125" />
+      <window_info anchor="bottom" id="Event Log" order="11" side_tool="true" />
+      <window_info anchor="bottom" id="Terminal" order="12" weight="0.44827586" />
+      <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
+      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
+      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
+      <window_info anchor="right" id="Database" order="3" weight="0.32934782" />
+      <window_info anchor="right" id="Coverage" order="4" side_tool="true" />
+    </layout>
+    <layout-to-restore>
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.7003058" visible="true" weight="0.27867097" />
+      <window_info id="Structure" order="1" sideWeight="0.29969418" side_tool="true" weight="0.27282608" />
+      <window_info id="Favorites" order="2" sideWeight="0.50850075" side_tool="true" weight="0.25108695" />
+      <window_info anchor="bottom" id="Message" order="0" />
+      <window_info anchor="bottom" id="Find" order="1" />
+      <window_info active="true" anchor="bottom" id="Run" order="2" visible="true" weight="0.33297414" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.5434243" />
+      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
+      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
+      <window_info anchor="bottom" id="TODO" order="6" weight="0.3283582" />
+      <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Version Control" order="8" />
+      <window_info anchor="bottom" id="Database Changes" order="9" />
+      <window_info anchor="bottom" id="Statistic" order="10" weight="0.3297414" />
+      <window_info anchor="bottom" id="Event Log" order="11" side_tool="true" />
+      <window_info anchor="bottom" id="Terminal" order="12" weight="0.44827586" />
+      <window_info anchor="right" id="Coverage" order="0" side_tool="true" />
+      <window_info anchor="right" id="Commander" internal_type="SLIDING" order="1" type="SLIDING" weight="0.4" />
+      <window_info anchor="right" id="Ant Build" order="2" weight="0.25" />
+      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="3" weight="0.25" />
+      <window_info anchor="right" id="Database" order="4" />
+    </layout-to-restore>
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="1" />
+  </component>
+  <component name="debuggerHistoryManager">
+    <expressions id="evaluateExpression">
+      <expression>
+        <expression-string>header.XXX_Size()</expression-string>
+        <language-id>go</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+    </expressions>
+  </component>
+  <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/../github.com/fsnotify/fsnotify/fsnotify.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="114">
+          <caret line="22" column="5" selection-start-line="22" selection-start-column="5" selection-end-line="22" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/container/list/list.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="120">
+          <caret line="14" column="5" selection-start-line="14" selection-start-column="5" selection-end-line="14" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/runtime/asm_amd64.s">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="162">
+          <caret line="1333" selection-start-line="1333" selection-end-line="1333" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/testing/testing.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="162">
+          <caret line="829" selection-start-line="829" selection-end-line="829" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/log/log.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="197">
+          <caret line="332" selection-start-line="332" selection-end-line="332" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fs/eventset.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="645">
+          <caret line="122" column="26" selection-start-line="122" selection-start-column="26" selection-end-line="122" selection-end-column="26" />
+          <folding>
+            <element signature="e#12#62#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/watcher/watcher.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="548">
+          <caret line="127" column="18" selection-start-line="127" selection-start-column="18" selection-end-line="127" selection-end-column="18" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/sync.go" />
+    <entry file="file:///usr/local/go/src/reflect/type.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="300">
+          <caret line="226" column="5" selection-start-line="226" selection-start-column="5" selection-end-line="226" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/reflect/value.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="270">
+          <caret line="1393" column="27" selection-start-line="1393" selection-start-column="27" selection-end-line="1393" selection-end-column="27" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/node/parse.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="585">
+          <caret line="140" selection-start-line="140" selection-end-line="140" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/node/neterror.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="330">
+          <caret line="22" column="17" selection-start-line="22" selection-start-column="17" selection-end-line="22" selection-end-column="17" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/node/node_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="180">
+          <caret line="12" selection-start-line="12" selection-end-line="12" />
+          <folding>
+            <element signature="e#14#87#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/builtin/builtin.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="330">
+          <caret line="163" column="20" lean-forward="true" selection-start-line="163" selection-start-column="20" selection-end-line="163" selection-end-column="20" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/node/io.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1095">
+          <caret line="88" column="5" lean-forward="true" selection-start-line="88" selection-start-column="5" selection-end-line="88" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/notify.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="135">
+          <caret line="9" column="1" selection-start-line="9" selection-start-column="1" selection-end-line="9" selection-end-column="1" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/time/sleep.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="300">
+          <caret line="84" column="21" selection-start-line="84" selection-start-column="21" selection-end-line="84" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/time/time.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="300">
+          <caret line="630" column="5" selection-start-line="630" selection-start-column="5" selection-end-line="630" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/timertask.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="793">
+          <caret line="63" column="28" selection-start-line="63" selection-start-column="28" selection-end-line="63" selection-end-column="28" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fs/fileinfo.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1741">
+          <caret line="237" column="1" lean-forward="true" selection-start-line="237" selection-start-column="1" selection-end-line="237" selection-end-column="1" />
+          <folding>
+            <element signature="e#12#156#0" expanded="true" />
+            <element signature="n#!!block;n#generateFileInforDir#0" />
+            <element signature="n#!!block;n#generateFileInforLink#0" />
+            <element signature="n#!!block;n#generateFileInfo#0" />
+            <element signature="n#!!block;n#caculateBlocks#0" />
+            <element signature="n#!!block;n#selectBlockSize#0" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fs/indexSeq.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="270">
+          <caret line="23" column="5" selection-start-line="23" selection-start-column="5" selection-end-line="23" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/main/views.go" />
+    <entry file="file:///usr/local/go/src/net/url/url.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="300">
+          <caret line="803" column="5" selection-start-line="803" selection-start-column="5" selection-end-line="803" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/net/http/request.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="300">
+          <caret line="240" column="16" selection-start-line="240" selection-start-column="16" selection-end-line="240" selection-end-column="16" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/devices.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-2660">
+          <caret line="17" column="58" selection-start-line="17" selection-start-column="58" selection-end-line="17" selection-end-column="58" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/main/router.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="225">
+          <caret line="15" column="43" selection-start-line="15" selection-start-column="43" selection-end-line="15" selection-end-column="43" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/bufio/scan.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="93">
+          <caret line="133" column="18" selection-start-line="133" selection-start-column="18" selection-end-line="133" selection-end-column="18" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/main/config.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-221">
+          <caret line="17" column="36" selection-start-line="17" selection-start-column="26" selection-end-line="17" selection-end-column="36" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/main/main.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="270">
+          <caret line="22" selection-start-line="22" selection-end-line="22" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/node/node.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="195">
+          <caret line="115" selection-start-line="115" selection-end-line="115" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/main/sync.cfg">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="30">
+          <caret line="2" column="99" selection-start-line="2" selection-start-column="99" selection-end-line="2" selection-end-column="99" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/node/connection.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="848">
+          <caret line="94" column="30" selection-start-line="94" selection-start-column="30" selection-end-line="94" selection-end-column="30" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/main/controller.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-165">
+          <caret line="85" column="14" selection-start-line="85" selection-start-column="14" selection-end-line="85" selection-end-column="14" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/io.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="518">
+          <caret line="180" column="4" selection-start-line="180" selection-start-column="4" selection-end-line="180" selection-end-column="4" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/database/sql/sql.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="292">
+          <caret line="118" column="5" selection-start-line="118" selection-start-column="5" selection-end-line="118" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fs/storage.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="329">
+          <caret line="119" column="3" selection-start-line="119" selection-start-column="3" selection-end-line="119" selection-end-column="3" />
+          <folding>
+            <element signature="e#12#255#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/folderopt.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2955">
+          <caret line="215" column="4" lean-forward="true" selection-start-line="215" selection-start-column="4" selection-end-line="215" selection-end-column="4" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/node/communication.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1155">
+          <caret line="80" selection-start-line="80" selection-end-line="80" />
+          <folding>
+            <element signature="e#14#52#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bep/bep.pb.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="9735">
+          <caret line="649" column="22" selection-start-line="649" selection-start-column="22" selection-end-line="667" selection-end-column="48" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fs/fs_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="653">
+          <caret line="148" column="21" selection-start-line="148" selection-start-column="21" selection-end-line="148" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/intset.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="420">
+          <caret line="31" column="30" selection-start-line="31" selection-start-column="30" selection-end-line="31" selection-end-column="30" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/storage.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="30">
+          <caret line="367" column="5" selection-start-line="367" selection-start-column="5" selection-end-line="367" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bep/bep.proto">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file:///usr/local/go/src/os/types.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-68">
+          <caret line="34" column="5" selection-start-line="34" selection-start-column="5" selection-end-line="34" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/os/file.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="292">
+          <caret line="263" column="5" selection-start-line="263" selection-start-column="5" selection-end-line="263" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/io/ioutil/ioutil.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="300">
+          <caret line="95" column="5" selection-start-line="95" selection-start-column="5" selection-end-line="95" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/go/src/sync/cond.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="255">
+          <caret line="20" column="5" selection-start-line="20" selection-start-column="5" selection-end-line="20" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/synctranscation.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="9330">
+          <caret line="640" selection-start-line="640" selection-end-line="640" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/sync_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="225">
+          <caret line="19" column="9" selection-start-line="19" selection-start-column="9" selection-end-line="19" selection-end-column="9" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/syncfile/sync.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1650">
+          <caret line="117" column="17" selection-start-line="117" selection-start-column="17" selection-end-line="117" selection-end-column="17" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fs/filesystem.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="510">
+          <caret line="390" column="32" selection-start-line="390" selection-start-column="31" selection-end-line="390" selection-end-column="32" />
+        </state>
+      </provider>
+    </entry>
+  </component>
+</project>
