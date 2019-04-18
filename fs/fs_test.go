@@ -28,7 +28,10 @@ func TestNewSet(t *testing.T) {
 	for {
 		select {
 		case e, _ := <-events:
-			es.NewEvent(e)
+			we := WrappedEvent{
+				Event:e,
+			}
+			es.NewEvent(we)
 		case <-timer.C:
 			logAllList(es)
 		}

@@ -280,18 +280,25 @@ func (fs *FileSystem) GetIndex(folder string) *bep.Index {
 func (fs *FileSystem) GetUpdates(folder string) []*bep.IndexUpdate {
 	updates := make([]*bep.IndexUpdate, 0)
 	fs.lock.RUnlock()
-	defer fs.lock.RUnlock()
+	if f,ok := fs.folders[folder];ok {
+		f.fl.lock.RLock()
+		defer f.fl.lock.RUnlock()
+		fs.lock.RUnlock()
+		return GetUpdate(folder,f.indexSeq)
+	} else  {
+		fs.lock.RUnlock()
+	}
 
 	return updates
 }
 
-func GetUpdate(folder string) []*bep.IndexUpdate {
+func GetUpdate(folder string,id int64) []*bep.IndexUpdate {
 	tx, err := db.Begin()
 	if err != nil {
 		panic(err)
 	}
 
-	indexSeqs, err := GetIndexSeqAfter(tx, 1, folder)
+	indexSeqs, err := GetIndexSeqAfter(tx, id, folder)
 	if err != nil {
 		panic(err)
 	}
@@ -326,6 +333,8 @@ func (fs *FileSystem) receiveEvent(folder string) {
 	}
 	//初始化	完成后再进行后续的相关逻辑
 	select {
+	case <-fn.stop:
+		return
 	case <-fn.fl.ready:
 	}
 

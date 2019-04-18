@@ -380,7 +380,7 @@ func (sm *SyncManager) getLocalIndex(folderId string) *bep.Index {
 }
 
 func (sm *SyncManager) getLocalIndexUpdate(folderId string) []*bep.IndexUpdate {
-	return sm.fsys.GetUpdates(folderId)
+	return sm.fsys.Get(folderId)
 }
 
 func caculateFileMap(receivedUpdates []*ReceiveIndexUpdate,

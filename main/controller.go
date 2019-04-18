@@ -86,7 +86,7 @@ func getUpdates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updates := fs.GetUpdate(folderId)
+	updates := fsys.GetUpdates(folderId)
 	for _, u := range updates {
 		_, _ = w.Write([]byte(
 			u.String()))
