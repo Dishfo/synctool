@@ -126,6 +126,7 @@ func SetInvaild(tx *sql.Tx, folder, name string) (int64, error) {
 		return -1, err
 	}
 	id, _ := res.RowsAffected()
+
 	return id, nil
 }
 
@@ -238,18 +239,26 @@ func fillFileInfo(rows *sql.Rows, info *bep.FileInfo) {
 }
 
 func GernerateFileInfoInDel(folder, name string, e WrappedEvent) (*bep.FileInfo, error) {
-	tx, err := db.Begin()
+	tx, err := GetTx()
 	if err != nil {
+		_=tx.Rollback()
 		return nil, errDbWrong
 	}
 	info, err := GetRecentInfo(tx, folder, name)
 	if err != nil {
+		_=tx.Rollback()
 		return nil, errDbWrong
 	}
+	if info == nil {
+		_=tx.Rollback()
+		return nil,errNoNeedInfo
+	}
+	_=tx.Commit()
 	info.Deleted = true
 	info.Size = 0
 	info.ModifiedS = e.Mods
-	info.ModifiedNs = int32(e.ModNs - msTons*e.Mods)
+	info.ModifiedNs = int32(e.ModNs - sTons*e.Mods)
+
 	return info, nil
 }
 

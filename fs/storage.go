@@ -117,6 +117,7 @@ type fileList struct {
 todo 事务处理中应该有更加细致的隔离等级划分
 */
 func GetTx() (*sql.Tx, error) {
+
 	return db.Begin()
 }
 
@@ -172,7 +173,6 @@ func randomDbName() string {
 func unmarshalBlcoks(p []byte) []*bep.BlockInfo {
 	buf := bytes.NewBuffer(p)
 	blocks := make([]*bep.BlockInfo, 0, 0)
-
 	for {
 		var l int64
 		err := binary.Read(buf, binary.BigEndian, &l)
@@ -186,7 +186,6 @@ func unmarshalBlcoks(p []byte) []*bep.BlockInfo {
 		_ = proto.Unmarshal(b, block)
 		blocks = append(blocks, block)
 	}
-
 	return blocks
 }
 

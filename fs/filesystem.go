@@ -23,24 +23,15 @@ var (
 )
 
 var (
-	msTons          int64 = 1000000000
+	sTons           int64 = 1000000000
 	ErrExistFolder        = errors.New("the folder has exist ")
 	ErrWatcherWrong       = errors.New("wrong occur create watcher ")
 )
 
 /**
-TODO 添加手动设置 fileInfo indexUpdate的模式
- 在一段时间内可以手动设置 fileinfo 在手动设置updateSeq
- 用于同步文件时
-
 func shieldFile(name string)
 func Unblock(name string)
-todo 对于target 是file
-todo 修改event 接收逻辑 与update 生成逻辑
 */
-
-//todo 哈哈哈哈 整个模块的锁策略还有待完善
-//todo get folder--file all update
 
 type FolderNode struct {
 	fl             *fileList
@@ -80,7 +71,6 @@ func (fn *FolderNode) DisableUpdate() {
 	fn.disableUpdater = true
 }
 
-//DisableUpdate will turn off auto caculate udpate function
 func (fn *FolderNode) EnableUpdate() {
 	fn.disableUpdater = false
 }
@@ -88,7 +78,7 @@ func (fn *FolderNode) EnableUpdate() {
 func (fn *FolderNode) shouldCaculateUpadte() bool {
 	fn.fl.lock.RLock()
 	defer fn.fl.lock.RUnlock()
-	return fn.disableUpdater
+	return !fn.disableUpdater
 }
 
 type FileSystem struct {
@@ -127,6 +117,7 @@ func (fs *FileSystem) AddFolder(folder string, real string) error {
 		fn.w = w
 		_ = w.SetFolder(real)
 		go fs.receiveEvent(folder)
+		go fs.handleEvents(folder)
 		fn.fl.lock.Lock()
 		defer fn.fl.lock.Unlock()
 		fs.lock.Unlock()
@@ -211,7 +202,7 @@ func (fs *FileSystem) caculateIndex(folder string) IndexSeq {
 		},
 	}
 
-	tx, err := db.Begin()
+	tx, err := GetTx()
 	if err != nil {
 		log.Fatalf(" %s when prepare generate index ", err.Error())
 	}
@@ -251,7 +242,7 @@ func (fs *FileSystem) GetIndex(folder string) *bep.Index {
 	index.Folder = folder
 	fs.lock.RLock()
 	defer fs.lock.RUnlock()
-	tx, err := db.Begin()
+	tx, err := GetTx()
 	if err != nil {
 		panic(err)
 	}
@@ -280,20 +271,20 @@ func (fs *FileSystem) GetIndex(folder string) *bep.Index {
 func (fs *FileSystem) GetUpdates(folder string) []*bep.IndexUpdate {
 	updates := make([]*bep.IndexUpdate, 0)
 	fs.lock.RUnlock()
-	if f,ok := fs.folders[folder];ok {
+	if f, ok := fs.folders[folder]; ok {
 		f.fl.lock.RLock()
 		defer f.fl.lock.RUnlock()
 		fs.lock.RUnlock()
-		return GetUpdate(folder,f.indexSeq)
-	} else  {
+		return GetUpdate(folder, f.indexSeq)
+	} else {
 		fs.lock.RUnlock()
 	}
 
 	return updates
 }
 
-func GetUpdate(folder string,id int64) []*bep.IndexUpdate {
-	tx, err := db.Begin()
+func GetUpdate(folder string, id int64) []*bep.IndexUpdate {
+	tx, err := GetTx()
 	if err != nil {
 		panic(err)
 	}
@@ -323,7 +314,6 @@ func GetUpdate(folder string,id int64) []*bep.IndexUpdate {
 	return updates
 }
 
-//todo 等待锁相关操作
 func (fs *FileSystem) receiveEvent(folder string) {
 	fs.lock.Lock()
 	fn, ok := fs.folders[folder]
@@ -339,13 +329,11 @@ func (fs *FileSystem) receiveEvent(folder string) {
 	}
 
 	events := fn.w.Events()
-	ticker := time.NewTicker(time.Second * 5)
 
 outter:
 	for {
 		select {
 		case <-fn.stop:
-			ticker.Stop()
 			return
 		case e, _ := <-events:
 			if fn.IsBlock(e.Name) {
@@ -356,16 +344,13 @@ outter:
 			now := time.Now()
 			we.Mods = now.Unix()
 			we.ModNs = now.UnixNano()
-		case <-ticker.C:
-			if fn.shouldCaculateUpadte() {
-				fs.caculateUpdate(fn)
-			}
+			fn.cacheEvent(we)
 		}
 	}
 }
 
 //处理event ，或者计算update
-func (fs *FileSystem) handleEvents(e fsnotify.Event, folder string) {
+func (fs *FileSystem) handleEvents(folder string) {
 	fs.lock.Lock()
 	fn, ok := fs.folders[folder]
 	fs.lock.Unlock()
@@ -403,13 +388,14 @@ func (fn *FolderNode) cacheEvent(e WrappedEvent) {
 }
 
 func setInvaild(folder, name string) {
-	tx, err := db.Begin()
+	tx, err := GetTx()
 	if err != nil {
 		log.Panicf("%s when receive a write Event on %s",
 			err.Error(), name)
 	}
 	_, err = SetInvaild(tx, folder, name)
 	if err != nil {
+		_=tx.Rollback()
 		log.Printf("%s set Invaild Flag on %s ", err.Error(), name)
 	}
 	_ = tx.Commit()
@@ -445,35 +431,8 @@ func (fs *FileSystem) handleEvent(e WrappedEvent, folder string) {
 		fn.eventSet.NewEvent(delE)
 		fn.eventSet.NewEvent(e)
 	}
+
 }
-
-/*func setDeleteInfo(tx *sql.Tx,
-	fn *FolderNode, folder, name string) int64 {
-
-	version, err := GetRecentVersion(tx, folder, name)
-	if err != nil {
-		panic(err)
-	}
-
-	v := fn.NextCounter()
-	now := time.Now()
-	info := new(bep.FileInfo)
-	info.Name = name
-	info.Deleted = true
-	info.ModifiedBy = uint64(LocalUser)
-	info.ModifiedS = now.Unix()
-	info.ModifiedNs = int32(now.UnixNano() - msTons*info.ModifiedS)
-	info.Blocks = []*bep.BlockInfo{}
-	info.Version = &bep.Vector{
-		Counters: append(version.Counters, v),
-	}
-	id, err := StoreFileinfo(tx, folder, info)
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
-*/
 
 func (fs *FileSystem) findRenameFile(folder string) string {
 	fn, ok := fs.folders[folder]
@@ -507,7 +466,7 @@ func (fs *FileSystem) caculateUpdate(fn *FolderNode) {
 	indexSeq.Folder = fn.fl.folder
 	indexSeq.Seq = make([]int64, 0)
 
-	tx, err := db.Begin()
+	tx, err := GetTx()
 	if err != nil {
 		log.Panicf("%s when ready to store update ", err.Error())
 	}
@@ -588,6 +547,7 @@ func newFileInfo(
 		if err != nil {
 			return ids, errDbWrong
 		}
+		log.Println(info)
 		l.BackWard(ele)
 		ids = append(ids, id)
 		return ids, nil
@@ -683,14 +643,11 @@ func (fs *FileSystem) getFolderIndexId(folderId string) int64 {
 	return -1
 }
 
-//todo 介个函数还没有实现
-//todo
-//todo
 
 func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) []byte {
 	fs.lock.RLock()
-	defer fs.lock.RUnlock()
 	if f, ok := fs.folders[folder]; ok {
+		fs.lock.RUnlock()
 		realPath := f.fl.real
 		filePath := filepath.Join(realPath, name)
 		fPtr, err := os.Open(filePath)
@@ -703,11 +660,28 @@ func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) []b
 			return nil
 		}
 		return data
+	}else {
+		fs.lock.RUnlock()
+		return nil
 	}
-	return nil
 }
 
-//todo 函数流程简化 修改函数参数 ，变为去读 folder -- >name ->offset --> size data
+//丢弃某一文件下的事件
+func (fs *FileSystem) DiscardEvents(folder, name string) {
+	fs.lock.RLock()
+	if f, ok := fs.folders[folder]; ok {
+		f.fl.lock.Lock()
+		defer f.fl.lock.Unlock()
+		fs.lock.RUnlock()
+		list := f.eventSet.lists[folder]
+		if list != nil {
+			list.Clear()
+		}
+	} else {
+		fs.lock.Unlock()
+	}
+}
+
 func (fs *FileSystem) GetBlock(req *bep.Request) *bep.Response {
 	resp := new(bep.Response)
 	resp.Id = req.Id

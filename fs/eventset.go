@@ -163,6 +163,11 @@ func (el *EventList) BackWard(element *Event) {
 	}
 }
 
+func (el *EventList) Clear() {
+	el.Head = new(Event)
+	el.Tail = el.Head
+}
+
 //
 func (e *Event) Back() *Event {
 	ptr := e
