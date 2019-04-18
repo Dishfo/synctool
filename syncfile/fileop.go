@@ -14,25 +14,19 @@ import (
 
 /**
 提供同步事务中需要的文件操作
-
 dup
 copy
 deleteFolder
-
 createFile
 createFolder
 createLink
-
-
 isExist() info
 isNewer(os.info,bep.info)
-
 restoreBak(fileBak)
-
 */
 
 const (
-	bakFilePermission = 0775
+	tmpFilePermission = 0775
 )
 
 const (
@@ -90,6 +84,8 @@ func deleteFolderWithOutBak(folder string) {
 			_ = os.Remove(filePath)
 		}
 	}
+
+	_ = os.Remove(folder)
 }
 
 func IsFile(info os.FileInfo) bool {
@@ -134,7 +130,6 @@ func deleteLink(link string, needBak bool) (*fileBak, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if !needBak {
 		_ = os.Remove(link)
 		return nil, nil
@@ -149,7 +144,6 @@ func deleteLink(link string, needBak bool) (*fileBak, error) {
 		_ = os.Remove(link)
 		return bak, nil
 	}
-
 }
 
 func dupFile(dst, src string) (int64, error) {
@@ -157,12 +151,25 @@ func dupFile(dst, src string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	info, _ := r.Stat()
 	w, err := os.OpenFile(dst, os.O_RDWR|os.O_TRUNC|os.O_CREATE,
-		tmpFilePermission)
+		info.Mode())
 	if err != nil {
 		return 0, err
 	}
 	return io.Copy(w, r)
+}
+
+func deleteTarget(file string) {
+	info, err := os.Stat(file)
+	if err != nil {
+		return
+	}
+	if info.IsDir() {
+		deleteFolderWithOutBak(file)
+	} else {
+		_ = os.Remove(file)
+	}
 }
 
 func copyFolder(dst, src string) error {
@@ -177,9 +184,6 @@ func copyFolder(dst, src string) error {
 
 	deleteFolderWithOutBak(dst)
 	err = os.Mkdir(dst, info.Mode())
-	if err != nil {
-		return err
-	}
 	srcInfos, err := ioutil.ReadDir(src)
 	if err != nil {
 		return err
@@ -233,11 +237,7 @@ func restoreBak(bak *fileBak) {
 
 	info, err := os.Stat(bak.file)
 	if err == nil {
-		if info.IsDir() {
-			deleteFolderWithOutBak(bak.file)
-		} else {
-			_ = os.Remove(bak.file)
-		}
+		deleteTarget(info.Name())
 	}
 
 	//移除现有的文件
@@ -290,7 +290,7 @@ func generateTmpFile(tFile *TargetFile, blockSet *BlockSet) (string, error) {
 	filePath := fmt.Sprintf("%d%s%s",
 		time.Now().UnixNano(), tFile.Folder, tFile.Name)
 	filePath = base32.StdEncoding.EncodeToString([]byte(filePath))
-	filePath = fmt.Sprintf("%s%s", tmpPrefix, filePath)
+	filePath = fmt.Sprintf("%s/%s", tmpFilePrefix, filePath)
 	fPtr, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_RDWR,
 		tmpFilePermission)
 	if err != nil {
@@ -310,6 +310,5 @@ func generateTmpFile(tFile *TargetFile, blockSet *BlockSet) (string, error) {
 			return "", errors.New("generateTmp file failed ")
 		}
 	}
-
 	return filePath, nil
 }

@@ -3,7 +3,6 @@ package fs
 import (
 	"bytes"
 	"crypto/md5"
-	"database/sql"
 	"errors"
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
@@ -357,14 +356,11 @@ func (fs *FileSystem) handleEvents(folder string) {
 	if !ok {
 		return
 	}
-	//初始化	完成后再进行后续的相关逻辑
 	select {
 	case <-fn.fl.ready:
 	}
-
 	events := fn.events
 	ticker := time.NewTicker(time.Second * 5)
-
 	for {
 		select {
 		case <-fn.stop:
@@ -395,7 +391,7 @@ func setInvaild(folder, name string) {
 	}
 	_, err = SetInvaild(tx, folder, name)
 	if err != nil {
-		_=tx.Rollback()
+		_ = tx.Rollback()
 		log.Printf("%s set Invaild Flag on %s ", err.Error(), name)
 	}
 	_ = tx.Commit()
@@ -466,20 +462,19 @@ func (fs *FileSystem) caculateUpdate(fn *FolderNode) {
 	indexSeq.Folder = fn.fl.folder
 	indexSeq.Seq = make([]int64, 0)
 
-	tx, err := GetTx()
-	if err != nil {
-		log.Panicf("%s when ready to store update ", err.Error())
-	}
-
 	for _, l := range lists {
-		ids, err := newFileInfo(fn, tx, l)
+		ids, err := newFileInfo(fn, l)
 		if err == errDbWrong {
-			_ = tx.Rollback()
 			return
 		} else if err == errNoNeedInfo {
 			continue
 		}
 		indexSeq.Seq = append(indexSeq.Seq, ids...)
+	}
+
+	tx, err := GetTx()
+	if err != nil {
+		log.Panicf("%s when ready to store update ", err.Error())
 	}
 
 	if len(indexSeq.Seq) == 0 {
@@ -500,14 +495,14 @@ var (
 	errDbWrong = errors.New("db tx occur some error ")
 )
 
-//根据事件队列产生多个info
+//移除input中的tx
 func newFileInfo(
 	fn *FolderNode,
-	tx *sql.Tx,
 	l *EventList) ([]int64, error) {
 	var info *bep.FileInfo
 	var err error
 	var name string
+
 	ids := make([]int64, 0)
 	folder := fn.fl.folder
 	base := fn.fl.real
@@ -522,10 +517,16 @@ func newFileInfo(
 			return ids, errNoNeedInfo
 		}
 	} else {
+		//todo 不要在tx 事务执行的过程中插入i/o 过长的io 可能会导致commit 失败
 		info, err = GenerateFileInfo(name)
 		if err != nil {
 			return ids, errNoNeedInfo
 		}
+	}
+
+	tx, err := GetTx()
+	if err != nil {
+		panic(err)
 	}
 
 	version, err := GetRecentVersion(tx, folder, ele.Name)
@@ -541,17 +542,21 @@ func newFileInfo(
 	if err != nil {
 		log.Printf("%s when genreate fileInfo for "+
 			"%s", err.Error(), name)
+		_ = tx.Rollback()
 		return ids, errDbWrong
 	} else {
 		id, err := StoreFileinfo(tx, folder, info)
 		if err != nil {
+			_ = tx.Rollback()
 			return ids, errDbWrong
 		}
 		log.Println(info)
 		l.BackWard(ele)
 		ids = append(ids, id)
+		_ = tx.Commit()
 		return ids, nil
 	}
+
 }
 
 func getRealFileList(base string) []string {
@@ -643,7 +648,6 @@ func (fs *FileSystem) getFolderIndexId(folderId string) int64 {
 	return -1
 }
 
-
 func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) []byte {
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
@@ -660,7 +664,7 @@ func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) []b
 			return nil
 		}
 		return data
-	}else {
+	} else {
 		fs.lock.RUnlock()
 		return nil
 	}

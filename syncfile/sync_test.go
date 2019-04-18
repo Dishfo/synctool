@@ -39,3 +39,18 @@ func TestTaskManger(t *testing.T) {
 
 	select {}
 }
+
+func TestFileOp(t *testing.T) {
+	bak, err := deleteFile("/home/dishfo/test2/fileA", true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	restoreBak(bak)
+
+	bak, err = deleteFolder("/home/dishfo/test2/dir1", true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	restoreBak(bak)
+
+}

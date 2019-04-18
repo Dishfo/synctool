@@ -29,7 +29,7 @@ func TestNewSet(t *testing.T) {
 		select {
 		case e, _ := <-events:
 			we := WrappedEvent{
-				Event:e,
+				Event: e,
 			}
 			es.NewEvent(we)
 		case <-timer.C:
@@ -131,8 +131,7 @@ func TestWordCount(t *testing.T) {
 	str := string(data)
 	strs := strings.Split(str, " ")
 
-
-	for i:=0;i<10;i++ {
+	for i := 0; i < 10; i++ {
 		wordCount2(strs)
 	}
 
@@ -174,9 +173,9 @@ func wordCount2(w []string) map[string]int {
 		mapnum := 0
 		for mapnum < workNum {
 			select {
-			case m:=<-reschl:
-				for k,v := range  m{
-					words[k]= words[k]+v
+			case m := <-reschl:
+				for k, v := range m {
+					words[k] = words[k] + v
 				}
 				mapnum++
 			}
@@ -187,4 +186,8 @@ func wordCount2(w []string) map[string]int {
 	wg.Wait()
 
 	return words
+}
+
+func TestFileOp(t *testing.T) {
+
 }

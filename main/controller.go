@@ -35,7 +35,7 @@ func initFs() {
 	fsys = fs.NewFileSystem()
 }
 
-func intiSync() {
+func initSync() {
 	sm = syncfile.NewSyncManager(fsys, cn)
 }
 
@@ -117,6 +117,7 @@ const (
 func AddDevice(w http.ResponseWriter, r *http.Request) {
 	device := new(bep.Device)
 	_ = r.ParseForm()
+
 	err := parseDevice(r.Form, device)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -140,7 +141,6 @@ func DeviceInfos(w http.ResponseWriter, r *http.Request) {
 }
 
 func FolderInfos(w http.ResponseWriter, r *http.Request) {
-	//folders := sm.GetFolders()
 	folders := sm.GetFolders()
 	for _, folder := range folders {
 		p, err := json.MarshalIndent(folder, "", " ")
@@ -150,6 +150,10 @@ func FolderInfos(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(p)
 		_, _ = w.Write([]byte("\r\n"))
 	}
+}
+
+func getIndexData(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func parseFolderOpt(data url.Values,
@@ -163,7 +167,16 @@ func parseFolderOpt(data url.Values,
 	opt.Label = data.Get("Label")
 	opt.Real = data.Get("Real")
 	deviceStr := data.Get("Devices")
-	opt.Devices = strings.Split(deviceStr, ",")
+	devices := strings.Split(deviceStr, ",")
+	opt.Devices = make([]string, 0)
+	for _, device := range devices {
+		if device == "" {
+			continue
+		}
+		opt.Devices = append(opt.Devices, device)
+	}
+
+	log.Println(deviceStr, "devices is ")
 	return nil
 }
 

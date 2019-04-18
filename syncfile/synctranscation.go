@@ -18,12 +18,11 @@ import (
 /**
 提供req等待管理
 */
-
+//todo 寻找时间过长的 tx - __ -
 type requestSet struct {
 	reqs      []*bep.Request
 	reqIds    []int64
 	expectNum int
-
 	reqSeqMap map[int64]int
 	devIds    []node.DeviceId
 	devReqMap map[node.DeviceId][]int64
@@ -31,8 +30,7 @@ type requestSet struct {
 	notify    []*node.ConnectionNotification
 	resps     map[int64]*bep.Response
 	wait      chan int
-
-	lock sync.Mutex
+	lock      sync.Mutex
 }
 
 func newReqSet(reqs []*bep.Request, devIds []node.DeviceId) *requestSet {
@@ -60,7 +58,6 @@ func newReqSet(reqs []*bep.Request, devIds []node.DeviceId) *requestSet {
 	}
 
 	reqSet.expectNum = len(reqs)
-
 	return reqSet
 }
 
@@ -126,8 +123,7 @@ type requestWaittingManager struct {
 	reqIdMap    map[int64]int64 //用于寻找red属于哪一个集合
 	reqSetMap   map[int64]*requestSet
 	idGenerator *int64
-
-	lock sync.Mutex
+	lock        sync.Mutex
 }
 
 func newReqWaitManager(provider NotificationProvider) *requestWaittingManager {
@@ -142,9 +138,7 @@ func newReqWaitManager(provider NotificationProvider) *requestWaittingManager {
 
 func (rwm *requestWaittingManager) Present(resp *bep.Response) {
 	rwm.lock.Lock()
-
 	id := rwm.reqIdMap[int64(resp.Id)]
-
 	if rs, ok := rwm.reqSetMap[id]; !ok {
 		rwm.lock.Unlock()
 		return
@@ -225,9 +219,25 @@ func (sm *SyncManager) prepareSync() {
 	}
 }
 
+func storeFileInfo(info *bep.FileInfo, folder string) (int64, error) {
+	tx, err := fs.GetTx()
+	if err != nil {
+		panic(err)
+	}
+
+	id, err := fs.StoreFileinfo(tx, folder, info)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	_ = tx.Commit()
+	return id, nil
+}
+
 //todo
 //todo
 //todo (3个todo做标记 ^ __ ^) 没有考虑对于 delete 的同步
+
 func (sm *SyncManager) syncFolder(folderId string) {
 	sm.folderLock.Lock()
 	if folder, ok := sm.folders[folderId]; !ok {
@@ -239,33 +249,42 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			return
 		}
 		sm.fsys.DisableCaculateUpdate(folderId)
+		//释放锁
+		sm.folderLock.Unlock()
+
 		defer sm.fsys.EnableCaculateUpdate(folderId)
 		defer endSyncTranscation(folder)
-		//切换fsys 的模式使程序在这段时间内不会产生update Seq
-		tFiles := sm.caculateNewestFolder(folder)
+
+		tFiles, last := sm.caculateNewestFolder(folder)
+		defer func() {
+			folder.lock.Lock()
+			defer folder.lock.Unlock()
+			if last > 0 {
+				folder.lastUpdate = last
+			}
+		}()
+
+		if tFiles == nil {
+			return
+		}
+
 		blockSet := descBlockSet(tFiles)
 		reqs := sm.createRequests(blockSet)
 		reqSet := newReqSet(reqs, blockSet.DeviceIds)
 		wait := sm.rwm.NewTransaction(reqSet)
 		select {
 		case <-wait:
-			//等待任务compete 暂时还不知道是否添加定时限制
 		}
+
 		sm.filitTargetFiles(tFiles, blockSet,
 			reqSet)
-		//此时block已携带所有可用数据
 
 		infos := make([]int64, 0)
-		tx, err := fs.GetTx()
-		if err != nil {
-			panic(err)
-		}
-
 		for _, tFolder := range tFiles.Folders {
 			sm.fsys.BlockFile(tFolder.Folder, tFolder.Name)
 			info := sm.doSyncFolder(tFolder)
 			if info != nil {
-				id, err := fs.StoreFileinfo(tx, tFolder.Folder, info)
+				id, err := storeFileInfo(info, tFolder.Name)
 				if err != nil {
 					infos = append(infos, id)
 				}
@@ -278,7 +297,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.doSyncFile(tFile, blockSet)
 			info := sm.doSyncFolder(tFile)
 			if info != nil {
-				id, err := fs.StoreFileinfo(tx, tFile.Folder, info)
+				id, err := storeFileInfo(info, tFile.Name)
 				if err != nil {
 					infos = append(infos, id)
 				}
@@ -291,7 +310,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.doSyncLink(tLink)
 			info := sm.doSyncFolder(tLink)
 			if info != nil {
-				id, err := fs.StoreFileinfo(tx, tLink.Folder, info)
+				id, err := storeFileInfo(info, tLink.Name)
 				if err != nil {
 					infos = append(infos, id)
 				}
@@ -299,6 +318,10 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.fsys.UnBlockFile(tLink.Folder, tLink.Name)
 		}
 
+		tx, err := fs.GetTx()
+		if err != nil {
+			panic(err)
+		}
 		if len(infos) != 0 {
 			_, err := fs.StoreIndexSeq(tx, fs.IndexSeq{
 				Folder: folder.Id,
@@ -309,9 +332,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 				//由于逻辑有些复杂 此处并不知道该如何处理
 				panic(err)
 			}
-
 		}
-		//恢复fsys的功能1
 		_ = tx.Commit()
 	}
 }
@@ -322,20 +343,28 @@ func (sm *SyncManager) LocalId() node.DeviceId {
 	return devId
 }
 
-func (sm *SyncManager) caculateNewestFolder(folder *ShareFolder) *TargetFiles {
+func (sm *SyncManager) caculateNewestFolder(folder *ShareFolder) (*TargetFiles, int64) {
 	tf := new(TargetFiles)
 	tf.Files = make([]*TargetFile, 0)
 	tf.Folders = make([]*TargetFile, 0)
 	tf.Links = make([]*TargetFile, 0)
-
+	var last int64 = 0
+	//内存表 每一个连接都是连接到一个新的表
 	tx, err := db.Begin()
 	if err != nil {
 		panic(err)
 	}
 
-	receUpdates, err := GetReceiveUpdateAfter(tx, folder.lastUpdate, folder.Id)
+	receiveUpdates, err := GetReceiveUpdateAfter(tx, folder.lastUpdate, folder.Id)
+	tx.Commit()
 	if err != nil {
 		panic(err)
+	}
+
+	if len(receiveUpdates) == 0 {
+		return nil, -1
+	} else {
+		last = receiveUpdates[len(receiveUpdates)-1].Id
 	}
 
 	otx, err := fs.GetTx()
@@ -348,7 +377,7 @@ func (sm *SyncManager) caculateNewestFolder(folder *ShareFolder) *TargetFiles {
 	_ = otx.Commit()
 
 	fromMap := make(map[string]node.DeviceId)
-	fileMap, localMap := caculateFileMap(receUpdates, localIndex,
+	fileMap, localMap := caculateFileMap(receiveUpdates, localIndex,
 		localUpdate, fromMap)
 
 	for name, info := range fileMap {
@@ -372,7 +401,7 @@ func (sm *SyncManager) caculateNewestFolder(folder *ShareFolder) *TargetFiles {
 		}
 	}
 
-	return tf
+	return tf, last
 }
 
 func (sm *SyncManager) getLocalIndex(folderId string) *bep.Index {
@@ -380,7 +409,7 @@ func (sm *SyncManager) getLocalIndex(folderId string) *bep.Index {
 }
 
 func (sm *SyncManager) getLocalIndexUpdate(folderId string) []*bep.IndexUpdate {
-	return sm.fsys.Get(folderId)
+	return sm.fsys.GetUpdates(folderId)
 }
 
 func caculateFileMap(receivedUpdates []*ReceiveIndexUpdate,
@@ -453,7 +482,6 @@ func compareFilePart(local, remote *bep.FileInfo, dev node.DeviceId, folder stri
 		fb := new(FileBlock)
 		fb.Folder = folder
 		fb.Name = local.Name
-
 		hashStr := base64.StdEncoding.EncodeToString(b.Hash)
 		if binfo, ok := blockHashMap[hashStr]; ok {
 			fillFileBlock(fb, binfo)
@@ -463,7 +491,6 @@ func compareFilePart(local, remote *bep.FileInfo, dev node.DeviceId, folder stri
 			fb.From = dev
 		}
 	}
-
 	return blocks
 }
 
@@ -625,7 +652,7 @@ func (sm *SyncManager) getLocalData(block *FileBlock) []byte {
 		block.Offset, block.Size)
 }
 
-//缺乏对于hash function 一致调用方式
+//缺乏对于hash function一致调用方式
 func validData(hash, data []byte) bool {
 	h := md5.Sum(data)
 	if bytes.Compare(hash, h[:]) != 0 {
@@ -806,8 +833,3 @@ func (sm *SyncManager) GetRealPath(folderId, name string) (string, error) {
 		return filepath.Join(folder, name), nil
 	}
 }
-
-const (
-	tmpPrefix         = "/tmp/"
-	tmpFilePermission = 0775
-)

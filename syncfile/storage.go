@@ -5,6 +5,7 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"syncfolders/bep"
@@ -14,11 +15,11 @@ import (
 
 /**
 in-memory sql
- */
+*/
 
 /**
 todo 事务处理中应该有更加细致的隔离等级划分
- */
+*/
 var (
 	db *sql.DB
 )
@@ -38,7 +39,7 @@ const (
 	`
 
 	createReceiveTable = `
-	create table ReceiveUpadte(
+	create table ReceiveUpdate(
 	id integer not null primary key autoincrement,
 	folder text,
 	remote integer,
@@ -56,11 +57,14 @@ const (
 	updateId integer
 	)
 	`
+
+	dbFile = "core.db"
 )
 
 func init() {
 	var err error
-	db, err = sql.Open("sqlite3", ":memory:")
+	_ = os.Remove(dbFile)
+	db, err = sql.Open("sqlite3", dbFile)
 	if err != nil {
 		log.Fatalf("%s when init in-memory databases ",
 			err.Error())
@@ -121,7 +125,7 @@ const (
 
 /**
 提供关系存储的访问函数
- */
+*/
 
 func DeleteRelation(tx *sql.Tx, id int64) {
 	stmt, _ := tx.Prepare(deleteRelation)
@@ -213,20 +217,20 @@ func fillRelation(rows *sql.Rows, relation *ShareRelation) error {
 
 const (
 	insertReceiveIndex = `
-	insert into ReceiveUpadte 
+	insert into ReceiveUpdate 
 	(folder ,remote,type,seqs,timestamp) 
 	values (?,?,?,?,?)
 	`
 
 	selectReceiveUpdate = `
 	select	id, folder ,remote,seqs,timestamp 
-	from ReceiveUpadte 
+	from ReceiveUpdate 
 	where id = ? 
 	`
 
 	selectReceiveUpdateAfter = `
 	select	id, folder ,remote,seqs,timestamp 
-	from ReceiveUpadte 
+	from ReceiveUpdate 
 	where id > ? and folder = ?
 	`
 )
@@ -443,7 +447,7 @@ func StringToArray(s string) []int64 {
 /**
 发送记录 以此为依据获取 到没有发送的 update
 定期发送出去
- */
+*/
 //todo
 
 var (
@@ -539,6 +543,7 @@ func GetSendUpdateToFolder(tx *sql.Tx,
 func fillSendUpdate(rows *sql.Rows, su *SendUpdate) {
 	var remote int64
 	err := rows.Scan(
+		&su.Id,
 		&su.Folder,
 		&remote,
 		&su.UpdateId)

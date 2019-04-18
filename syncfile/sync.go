@@ -112,10 +112,9 @@ func NewSyncManager(fsys *fs.FileSystem,
 	return sm
 }
 
-
-func (sm *SyncManager) ProvideNotification(remote node.DeviceId) *node.ConnectionNotification{
-	notify,err := sm.cn.RegisterNotification(remote)
-	if err!=nil {
+func (sm *SyncManager) ProvideNotification(remote node.DeviceId) *node.ConnectionNotification {
+	notify, err := sm.cn.RegisterNotification(remote)
+	if err != nil {
 		return nil
 	}
 	return notify
@@ -128,7 +127,7 @@ func (sm *SyncManager) ProvideNotification(remote node.DeviceId) *node.Connectio
 
 func (sm *SyncManager) setupTimerTask() {
 	sm.tm.AddTask(Task{
-		Dur:  int64(time.Second * 15),
+		Dur:  int64(time.Second * 8),
 		Type: TASK_DUR,
 		Act: func() {
 			sm.preparedConnect()
@@ -144,8 +143,8 @@ func (sm *SyncManager) setupTimerTask() {
 	})
 
 	sm.tm.AddTask(Task{
-		Dur:int64(time.Second*10),
-		Type:TASK_DUR,
+		Dur:  int64(time.Second * 10),
+		Type: TASK_DUR,
 		Act: func() {
 			sm.prepareSync()
 		},

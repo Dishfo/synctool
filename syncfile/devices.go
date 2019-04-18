@@ -12,10 +12,11 @@ import (
 /**
 同步模块下的设备管
 */
+
 func (sm *SyncManager) NewDevice(dev *bep.Device, hostId string) {
 	pId, err := peer.IDB58Decode(hostId)
 	if err != nil {
-		log.Printf("%s when add a new device ",err.Error())
+		log.Printf("%s when add a new device ", err.Error())
 		return
 	}
 
@@ -53,7 +54,6 @@ func (sm *SyncManager) Devices() []*bep.Device {
 	}
 	return devices
 }
-
 
 func (sm *SyncManager) Device(id node.DeviceId) *bep.Device {
 	sm.devLock.RLock()
@@ -100,7 +100,7 @@ func (sm *SyncManager) onDisConnected(id node.DeviceId) {
 }
 
 func (sm *SyncManager) preparedConnect() {
-	if sm.startConnectionTransacation() {
+	if !sm.startConnectionTransacation() {
 		return
 	}
 
@@ -121,8 +121,15 @@ func (sm *SyncManager) preparedConnect() {
 		go func() {
 			err := sm.connectDevice(id)
 			if err == nil {
-				sm.hasConnected(k)
+				sm.hasConnected(id)
 			}
+			if err == node.ErrHasConnected {
+				if !sm.isConnectd(id) {
+					sm.hasConnected(id)
+				}
+			}
+			log.Printf("%s when connection %s", err.Error(),
+				id.String())
 			wg.Done()
 		}()
 	}
@@ -178,9 +185,9 @@ func (sm *SyncManager) hasConnected(id node.DeviceId) {
 //with lock
 func (sm *SyncManager) connectDevice(id node.DeviceId) error {
 	sm.devLock.RLock()
-	if pid, ok := sm.devices[id]; ok {
+	if pid, ok := sm.hostIds[id]; ok {
 		sm.devLock.RUnlock()
-		return sm.cn.ConnectDevice(id, pid.String())
+		return sm.cn.ConnectDevice(id, pid.Pretty())
 	} else {
 		sm.devLock.RUnlock()
 		return errors.New("unkonw host id of device ")
@@ -216,8 +223,8 @@ func (sm *SyncManager) generateClusterConfig() *bep.ClusterConfig {
 }
 
 /**getConnectedDevice return has been connected devices
- this method may return a has DisConnected device
- */
+this method may return a has DisConnected device
+*/
 func (sm *SyncManager) getConnectedDevice() []node.DeviceId {
 	sm.devLock.RLock()
 	defer sm.devLock.RUnlock()

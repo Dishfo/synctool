@@ -13,7 +13,7 @@ import (
 
 /**
 添加folder 作为参数
- */
+*/
 type FolderOption struct {
 	Id                string
 	Label             string
@@ -25,7 +25,7 @@ type FolderOption struct {
 
 /**
 在管理单元中的model
- */
+*/
 type ShareFolder struct {
 	Id                string
 	Label             string
@@ -66,7 +66,7 @@ func (share *ShareFolder) Attribute() *FolderAttribute {
 
 /**
 shareFolde 的一个视图
- */
+*/
 type FolderAttribute struct {
 	Id                string
 	Label             string
@@ -186,9 +186,9 @@ func setValue(field reflect.Value, v interface{}) error {
 func (sm *SyncManager) onFoldersChange() {
 	devIds := sm.getConnectedDevice()
 	config := sm.generateClusterConfig()
-	for _,dev := range devIds {
-		err:=sm.SendMessage(dev,config)
-		if err!=nil {
+	for _, dev := range devIds {
+		err := sm.SendMessage(dev, config)
+		if err != nil {
 			sm.onDisConnected(dev)
 		}
 	}
@@ -212,7 +212,9 @@ func (sm *SyncManager) EndSendUpdate() {
 	sm.inSendUpdateTranscation = false
 }
 
-//定期执行的任务
+//todo 将这里的数据库操作分割到多个事务中
+
+//定期执行的任务 修改逻辑避事务中穿插过多的 i/o
 func (sm *SyncManager) prepareSendUpdate() {
 	var err error
 	var otx *sql.Tx
@@ -269,26 +271,26 @@ func (sm *SyncManager) prepareSendUpdate() {
 			indexs, updates := sm.getUpdatesByIndexSeq(readySend)
 			for id, index := range indexs {
 				sm.sendUpdate(dev,
-					index,relation.Folder,tx,id)
+					index, relation.Folder, tx, id)
 			}
 			for id, update := range updates {
 				sm.sendUpdate(dev,
-					update,relation.Folder,tx,id)
+					update, relation.Folder, tx, id)
 			}
 		}
 	}
-end :
-	if err== nil {
+end:
+	if err == nil {
 		_ = otx.Commit()
 		_ = tx.Commit()
-	}else {
+	} else {
 		_ = otx.Rollback()
 		_ = tx.Rollback()
 	}
 }
 
-func  (sm *SyncManager) sendUpdate(remote node.DeviceId,
-	data interface{},folderId string,tx *sql.Tx,uid int64){
+func (sm *SyncManager) sendUpdate(remote node.DeviceId,
+	data interface{}, folderId string, tx *sql.Tx, uid int64) {
 	err := sm.SendMessage(remote, data)
 	if err == nil {
 		su := &SendUpdate{
@@ -303,5 +305,5 @@ func  (sm *SyncManager) sendUpdate(remote node.DeviceId,
 //严格区分index indexUpdate
 func (sm *SyncManager) getUpdatesByIndexSeq(indexSeqs []*fs.IndexSeq) (map[int64]*bep.Index,
 	map[int64]*bep.IndexUpdate) {
-	return  sm.fsys.GetIndexUpdates(indexSeqs)
+	return sm.fsys.GetIndexUpdates(indexSeqs)
 }

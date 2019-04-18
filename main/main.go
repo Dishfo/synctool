@@ -6,43 +6,21 @@ import (
 	"net/http"
 )
 
-
 //注册handshake handler 驱动fsystem
 func init() {
 
 }
 
-
-func main(){
+func main() {
 	flag.Parse()
 	fill()
 	err := vaildation()
-	if err!=nil {
+	if err != nil {
 		log.Fatal(err)
 	}
 	initNode()
 	initFs()
+	initSync()
 	route()
-	log.Fatal(http.ListenAndServe(configs[TagHttpListen],nil))
+	log.Fatal(http.ListenAndServe(configs[TagHttpListen], nil))
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -13,7 +13,7 @@ import (
 
 /**
 提供节点间的连接
- */
+*/
 //todo 及时通知某个设备间的连接不可用了
 /*
 
@@ -129,7 +129,7 @@ func (cm *ConnectionNode) ConnectDevice(id DeviceId, hostId string) error {
 	if cstate == Connected {
 		return ErrHasConnected
 	}
-	log.Println(cstate)
+
 	return cm.tryConnecting(id, hostId)
 }
 
@@ -147,6 +147,7 @@ func (cm *ConnectionNode) checkCfd(id DeviceId) ConnectState {
 	}
 }
 
+//居然把查找节点 address 的事给忘了
 func (cm *ConnectionNode) tryConnecting(id DeviceId, hostId string) error {
 
 	cm.lock.Lock()
