@@ -3,26 +3,21 @@ package syncfile
 import (
 	"bytes"
 	"crypto/md5"
-	"encoding/base32"
 	"encoding/base64"
-	"fmt"
 	"github.com/pkg/errors"
-	"io"
-	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"syncfolders/bep"
 	"syncfolders/fs"
 	"syncfolders/node"
-	"time"
 )
 
 /**
 提供req等待管理
- */
+*/
 
 type requestSet struct {
 	reqs      []*bep.Request
@@ -164,14 +159,14 @@ func (rwm *requestWaittingManager) Present(resp *bep.Response) {
 	}
 }
 
-func (rwm *requestWaittingManager) NewTranscation(rs *requestSet) chan int {
+func (rwm *requestWaittingManager) NewTransaction(rs *requestSet) chan int {
 	id := atomic.AddInt64(rwm.idGenerator, 1)
 
 	for _, reqId := range rs.reqIds {
 		rwm.reqIdMap[int64(reqId)] = id
 	}
 
-	for k, _ := range rs.devReqMap {
+	for k := range rs.devReqMap {
 		devId := k
 		go func() {
 			notif := rwm.provider.ProvideNotification(devId)
@@ -243,13 +238,15 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.folderLock.Unlock()
 			return
 		}
+		sm.fsys.DisableCaculateUpdate(folderId)
+		defer sm.fsys.EnableCaculateUpdate(folderId)
 		defer endSyncTranscation(folder)
 		//切换fsys 的模式使程序在这段时间内不会产生update Seq
 		tFiles := sm.caculateNewestFolder(folder)
 		blockSet := descBlockSet(tFiles)
 		reqs := sm.createRequests(blockSet)
 		reqSet := newReqSet(reqs, blockSet.DeviceIds)
-		wait := sm.rwm.NewTranscation(reqSet)
+		wait := sm.rwm.NewTransaction(reqSet)
 		select {
 		case <-wait:
 			//等待任务compete 暂时还不知道是否添加定时限制
@@ -265,7 +262,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		}
 
 		for _, tFolder := range tFiles.Folders {
-			sm.fsys.BlcokFile(tFolder.Folder, tFolder.Name)
+			sm.fsys.BlockFile(tFolder.Folder, tFolder.Name)
 			info := sm.doSyncFolder(tFolder)
 			if info != nil {
 				id, err := fs.StoreFileinfo(tx, tFolder.Folder, info)
@@ -277,7 +274,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		}
 
 		for _, tFile := range tFiles.Files {
-			sm.fsys.BlcokFile(tFile.Folder, tFile.Name)
+			sm.fsys.BlockFile(tFile.Folder, tFile.Name)
 			sm.doSyncFile(tFile, blockSet)
 			info := sm.doSyncFolder(tFile)
 			if info != nil {
@@ -290,7 +287,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		}
 
 		for _, tLink := range tFiles.Links {
-			sm.fsys.BlcokFile(tLink.Folder, tLink.Name)
+			sm.fsys.BlockFile(tLink.Folder, tLink.Name)
 			sm.doSyncLink(tLink)
 			info := sm.doSyncFolder(tLink)
 			if info != nil {
@@ -351,11 +348,11 @@ func (sm *SyncManager) caculateNewestFolder(folder *ShareFolder) *TargetFiles {
 	_ = otx.Commit()
 
 	fromMap := make(map[string]node.DeviceId)
-	fileMap, localMap := caculateFileMap(receUpdates, localIndex, localUpdate, fromMap)
+	fileMap, localMap := caculateFileMap(receUpdates, localIndex,
+		localUpdate, fromMap)
 
 	for name, info := range fileMap {
 		if dev, ok := fromMap[name]; ok {
-			//表示来自其他节点
 			file := new(TargetFile)
 			file.Name = info.Name
 			file.Dst = info
@@ -415,11 +412,9 @@ func caculateFileMap(receivedUpdates []*ReceiveIndexUpdate,
 			}
 		}
 	}
-
 	return fileMap, localMap
 }
 
-//0 local remote 1
 func chooseOneInfo(local, remote *bep.FileInfo) int {
 	if local == nil {
 		return 1
@@ -436,7 +431,6 @@ func isNewer(local, remote *bep.FileInfo) bool {
 		(remote.ModifiedS + int64(remote.ModifiedNs)) {
 		return true
 	}
-
 	return false
 }
 
@@ -594,19 +588,39 @@ func (sm *SyncManager) filitTargetFiles(tFiles *TargetFiles,
 		}
 	}
 	tFiles.Files = newFiles
-	pretreatTargetFiles(tFiles)
+	pretreatedTargetFiles(tFiles)
 }
 
 type TargetFolders []*TargetFile
 
-//对folder 进行排序
-
-//对folder 进行排序 移除非法的link文件
-func pretreatTargetFiles(tFiles *TargetFiles) {
-
+func (ts TargetFolders) Len() int {
+	return len(ts)
 }
 
-func (sm *SyncManager) getLocalData(block *FileBlock) ( []byte) {
+func (ts TargetFolders) Swap(i, j int) {
+	ts[i], ts[j] = ts[j], ts[i]
+}
+
+func (ts TargetFolders) Less(i, j int) bool {
+	return len(ts[i].Folder) < len(ts[j].Folder)
+}
+
+//对folder 进行排序 移除非法的link文件
+func pretreatedTargetFiles(tFiles *TargetFiles) {
+	sort.Sort(TargetFolders(tFiles.Folders))
+	newLinks := make([]*TargetFile, 0)
+	for _, info := range tFiles.Links {
+		target := info.Dst.SymlinkTarget
+		_, err := filepath.Rel(info.Folder, target)
+		if err != nil {
+			continue
+		}
+		newLinks = append(newLinks, info)
+	}
+	tFiles.Links = newLinks
+}
+
+func (sm *SyncManager) getLocalData(block *FileBlock) []byte {
 	return sm.fsys.GetData(block.Folder, block.Name,
 		block.Offset, block.Size)
 }
@@ -621,54 +635,45 @@ func validData(hash, data []byte) bool {
 }
 
 func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
+	var bak *fileBak
+	var err error
 	filePath, err := sm.GetRealPath(tFolder.Folder, tFolder.Name)
+
 	if err != nil {
 		return nil
 	}
 
+	permission := os.FileMode(tFolder.Dst.Permissions)
 	info, err := os.Stat(filePath)
 
-	if os.IsNotExist(err) {
-		err := createFolder(filePath)
-		if err != nil {
-			log.Printf("%s when sync %s create %s\n",
-				err.Error(), tFolder.Folder, filePath)
-			return nil
-		}
-	} else {
+	if !os.IsNotExist(err) {
 		if info.IsDir() {
 			return nil
+		}
+		if hasNewerFile(info, tFolder.Dst) {
+			return nil
+		}
+
+		if info.IsDir() {
+			return nil
+		} else if IsLink(info) {
+			bak, err = deleteLink(filePath, true)
 		} else {
-			if hasNewerFile(info, tFolder.Dst) {
-				return nil
- 			}
- 			_ = os.Remove(filePath)
- 			err := createFolder(filePath)
- 			if err != nil {
- 				log.Printf("%s when sync %s create %s\n",
- 					err.Error(), tFolder.Folder, filePath)
- 				return nil
- 			}
- 		}
- 	}
+			bak, err = deleteFile(filePath, true)
+		}
+	}
 
- 	return tFolder.Dst
-}
+	if err != nil {
+		return nil
+	}
 
-const (
- 	FolderPermission = 0775
-)
+	err = createFolder(filePath, permission)
+	if err != nil {
+		restoreBak(bak)
+		return nil
+	}
 
-func hasNewerFile(info os.FileInfo, info1 *bep.FileInfo) bool {
- 	if info.ModTime().UnixNano() > (info1.ModifiedS + int64(info1.ModifiedNs)) {
- 		return true
- 	}
- 	return false
-}
-
-//穿件出folder
-func createFolder(file string) error {
- 	return os.Mkdir(file, FolderPermission)
+	return tFolder.Dst
 }
 
 func IsLink(info os.FileInfo) bool {
@@ -679,68 +684,109 @@ func IsLink(info os.FileInfo) bool {
 	return false
 }
 
-//todo 需要考虑失败时 文件的恢复
 func (sm *SyncManager) doSyncFile(tFile *TargetFile, blockSet *BlockSet) *bep.FileInfo {
+	var bak *fileBak
+	var err error
+	var needDelete = false
 	filePath, err := sm.GetRealPath(tFile.Folder, tFile.Name)
+	permission := os.FileMode(tFile.Dst.Permissions)
 	if err != nil {
 		return nil
 	}
+
 	info, err := os.Stat(filePath)
-	create := false
-	if os.IsNotExist(err) {
-		create = true
-	} else {
+
+	if os.IsExist(err) {
 		if hasNewerFile(info, tFile.Dst) {
 			return nil
 		}
+
 		if info.IsDir() {
-			deleteFolder(info.Name())
-			create = true
+			bak, err = deleteFolder(filePath, true)
 		} else if IsLink(info) {
-			_ = os.Remove(filePath)
-			create = true
-		}
-	}
-
-	tmpFile, err := generateTmpFile(tFile, blockSet)
-	if err != nil {
-		return nil
-	}
-	err = createFile(filePath)
-	if err != nil {
-		if create {
-			_ = os.Remove(filePath)
-		}
-		return nil
-	}
-	_, err = dupFile(filePath, tmpFile)
-	if err != nil {
-		if create {
-			_ = os.Remove(filePath)
-		}
-		return nil
-	}
-	return tFile.Dst
-}
-
-//移除一个文件夹 和文件夹下的所有文件 在调用前应该保证确实是一个folder
-func deleteFolder(folder string) {
-	infos, _ := ioutil.ReadDir(folder)
-	for _, info := range infos {
-		filePath := filepath.Join(folder, info.Name())
-		if info.IsDir() {
-			deleteFolder(filePath)
+			bak, err = deleteLink(filePath, true)
 		} else {
-			_ = os.Remove(filePath)
+			needDelete = true
 		}
 	}
-	_ = os.Remove(folder)
 
+	if err != nil {
+		return nil
+	}
+
+	if !tFile.Dst.Deleted {
+		tmpFile, err := generateTmpFile(tFile, blockSet)
+		if err != nil {
+			goto rollback
+		}
+
+		err = createFile(filePath, permission)
+		if err != nil {
+			goto rollback
+		}
+
+		_, err = dupFile(filePath, tmpFile)
+		if err != nil {
+			goto rollback
+		}
+	} else {
+		if needDelete {
+			_, _ = deleteFile(filePath, false)
+		}
+	}
+
+	return tFile.Dst
+
+rollback:
+	restoreBak(bak)
+	return nil
 }
 
 func (sm *SyncManager) doSyncLink(tLink *TargetFile) *bep.FileInfo {
+	var bak *fileBak
+	var err error
+	var needDelete = false
+	filePath, err := sm.GetRealPath(tLink.Folder, tLink.Name)
+	target := tLink.Dst.SymlinkTarget
+	info, err := os.Stat(filePath)
+	if os.IsExist(err) {
+		if hasNewerFile(info, tLink.Dst) {
+			return nil
+		}
+
+		if info.IsDir() {
+			bak, err = deleteFolder(filePath, true)
+		} else if IsLink(info) {
+			link, _ := os.Readlink(info.Name())
+			if link != target {
+				bak, err = deleteLink(filePath, true)
+				if err != nil {
+					return nil
+				}
+			} else {
+				needDelete = true
+			}
+		} else {
+			bak, err = deleteFile(filePath, true)
+		}
+	}
+
+	if !tLink.Dst.Deleted {
+		err = createLink(filePath, target)
+		if err != nil {
+			goto rollback
+		}
+	} else {
+		if needDelete {
+			_, _ = deleteLink(filePath, false)
+		}
+	}
 
 	return tLink.Dst
+
+rollback:
+	restoreBak(bak)
+	return nil
 }
 
 func (sm *SyncManager) GetFolderPath(folderId string) string {
@@ -765,51 +811,3 @@ const (
 	tmpPrefix         = "/tmp/"
 	tmpFilePermission = 0775
 )
-
-//是否需要提高 i/o效率
-func generateTmpFile(tFile *TargetFile, blockSet *BlockSet) (string, error) {
-	filePath := fmt.Sprintf("%d%s%s",
-		time.Now().UnixNano(), tFile.Folder, tFile.Name)
-	filePath = base32.StdEncoding.EncodeToString([]byte(filePath))
-	filePath = fmt.Sprintf("%s%s", tmpPrefix, filePath)
-	fPtr, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_RDWR,
-		tmpFilePermission)
-	if err != nil {
-		return "", err
-	}
-	defer fPtr.Close()
-	seqs := blockSet.fileBlockMap[tFile.Name]
-	for _, seq := range seqs {
-		block := blockSet.datas[seq]
-		if block == nil {
-			_ = os.Remove(filePath)
-			return "", errors.New("data block is not available")
-		}
-		_, err := fPtr.Write(block)
-		if err != nil {
-			_ = os.Remove(filePath)
-			return "", errors.New("generateTmp file failed ")
-		}
-	}
-
-	return filePath, nil
-}
-
-func dupFile(dst, src string) (int64, error) {
-	dstPtr, err := os.OpenFile(dst, os.O_RDWR|os.O_TRUNC, 0)
-	if err != nil {
-		return 0, err
-	}
-	defer dstPtr.Close()
-	srcPtr, err := os.OpenFile(src, os.O_RDONLY, 0)
-	if err != nil {
-		return 0, err
-	}
-	defer dstPtr.Close()
-	return io.Copy(dstPtr, srcPtr)
-}
-
-func createFile(filePath string) error {
-	_, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, tmpFilePermission)
-	return err
-}

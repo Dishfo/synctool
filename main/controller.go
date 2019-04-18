@@ -15,7 +15,7 @@ import (
 
 /**
 用于提供http handler
- */
+*/
 
 var (
 	cn   *node.ConnectionNode = nil
@@ -86,7 +86,7 @@ func getUpdates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updates := fs.GetUpadte(folderId)
+	updates := fs.GetUpdate(folderId)
 	for _, u := range updates {
 		_, _ = w.Write([]byte(
 			u.String()))
@@ -97,7 +97,7 @@ func AddFolder(w http.ResponseWriter, r *http.Request) {
 	opt := new(syncfile.FolderOption)
 	_ = r.ParseForm()
 	err := parseFolderOpt(r.Form, opt)
-	if err!=nil {
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(err.Error()))
 		return
@@ -118,7 +118,7 @@ func AddDevice(w http.ResponseWriter, r *http.Request) {
 	device := new(bep.Device)
 	_ = r.ParseForm()
 	err := parseDevice(r.Form, device)
-	if err!=nil {
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(err.Error()))
 		return
@@ -130,7 +130,7 @@ func AddDevice(w http.ResponseWriter, r *http.Request) {
 func DeviceInfos(w http.ResponseWriter, r *http.Request) {
 	devices := sm.Devices()
 	for _, device := range devices {
-		p, err := json.MarshalIndent(device,""," ")
+		p, err := json.MarshalIndent(device, "", " ")
 		if err != nil {
 			continue
 		}
@@ -142,8 +142,8 @@ func DeviceInfos(w http.ResponseWriter, r *http.Request) {
 func FolderInfos(w http.ResponseWriter, r *http.Request) {
 	//folders := sm.GetFolders()
 	folders := sm.GetFolders()
-	for _,folder := range  folders {
-		p, err := json.MarshalIndent(folder,""," ")
+	for _, folder := range folders {
+		p, err := json.MarshalIndent(folder, "", " ")
 		if err != nil {
 			continue
 		}
@@ -156,23 +156,23 @@ func parseFolderOpt(data url.Values,
 	opt *syncfile.FolderOption) error {
 	var err error
 	opt.Id = data.Get("Id")
-	opt.ReadOnly,err  = strconv.ParseBool(data.Get("ReadOnly"))
-	if err!=nil {
+	opt.ReadOnly, err = strconv.ParseBool(data.Get("ReadOnly"))
+	if err != nil {
 		return err
 	}
 	opt.Label = data.Get("Label")
 	opt.Real = data.Get("Real")
 	deviceStr := data.Get("Devices")
-	opt.Devices = strings.Split(deviceStr,",")
+	opt.Devices = strings.Split(deviceStr, ",")
 	return nil
 }
 
 func parseDevice(data url.Values,
-	dev *bep.Device)error {
+	dev *bep.Device) error {
 	dev.Name = data.Get("Name")
 	id := data.Get("Id")
-	devId,err := node.GenerateIdFromString(id)
-	if err!=nil {
+	devId, err := node.GenerateIdFromString(id)
+	if err != nil {
 		return err
 	}
 	dev.Id = devId.Bytes()

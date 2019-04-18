@@ -95,11 +95,17 @@ continue
 uid := storeUpdate(infoIdss
 }
 
-
 */
+
+type WrappedEvent struct {
+	fsnotify.Event
+	Mods  int64
+	ModNs int64
+}
+
 //手工实现的list item
 type Event struct {
-	fsnotify.Event
+	WrappedEvent
 	Next *Event
 	Pre  *Event
 }
@@ -118,11 +124,11 @@ func NewList() *EventList {
 	return el
 }
 
-func (el *EventList) NewEvent(e fsnotify.Event) {
+func (el *EventList) NewEvent(e WrappedEvent) {
 	el.lock.Lock()
 	defer el.lock.Unlock()
 	eptr := new(Event)
-	eptr.Event = e
+	eptr.WrappedEvent = e
 	el.Tail.Next = eptr
 	el.Tail.Pre = el.Tail
 	el.Tail = eptr
@@ -186,7 +192,7 @@ func (el *EventList) Pre(e *Event) *Event {
 
 /**
 多个list集合
- */
+*/
 type EventSet struct {
 	lists map[string]*EventList
 	lock  sync.RWMutex
@@ -199,7 +205,7 @@ func NewEventSet() *EventSet {
 }
 
 //
-func (es *EventSet) NewEvent(e fsnotify.Event) {
+func (es *EventSet) NewEvent(e WrappedEvent) {
 	es.lock.Lock()
 	el, ok := es.lists[e.Name]
 	if !ok {

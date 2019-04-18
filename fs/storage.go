@@ -43,10 +43,9 @@ todo 把tx 作为接口函数的参数
 缺乏对这些问题的探讨
 */
 
-
-const(
-	DbFileSuff = ".db"
-	createFileInfoTable  = `
+const (
+	DbFileSuff          = ".db"
+	createFileInfoTable = `
 	create table FileInfo (
 	id integer not null primary key autoincrement,
 	folder text,
@@ -93,14 +92,14 @@ func init() {
 		log.Fatal(err)
 	}
 
-	_,err=db.Exec(createFileInfoTable)
-	if err!=nil {
-		log.Fatal(err," when create fileInfo table")
+	_, err = db.Exec(createFileInfoTable)
+	if err != nil {
+		log.Fatal(err, " when create fileInfo table")
 	}
 
-	_,err=db.Exec(createSeqTable)
-	if err!=nil {
-		log.Fatal(err," when create fileInfo table")
+	_, err = db.Exec(createSeqTable)
+	if err != nil {
+		log.Fatal(err, " when create fileInfo table")
 	}
 	log.Println("init sqlite DataBase ")
 
@@ -110,48 +109,45 @@ type fileList struct {
 	folder string
 	real   string
 	items  map[string]int
-	lock sync.RWMutex
-	ready chan int
+	lock   sync.RWMutex
+	ready  chan int
 }
-
 
 /**
 todo 事务处理中应该有更加细致的隔离等级划分
- */
-func GetTx() (*sql.Tx,error){
+*/
+func GetTx() (*sql.Tx, error) {
 	return db.Begin()
 }
 
 func newFileList(folder string) *fileList {
 	fl := new(fileList)
-	fl.folder =folder
+	fl.folder = folder
 	fl.items = make(map[string]int)
 	fl.ready = make(chan int)
 	return fl
 }
 
-
 func (fl *fileList) getItems() []string {
-	items := make([]string,0)
-	for k,v := range fl.items {
+	items := make([]string, 0)
+	for k, v := range fl.items {
 		if v > 0 {
-			items= append(items, k)
+			items = append(items, k)
 		}
 	}
 	return items
 }
 
-func (fl *fileList) newItem(name string){
-	fl.items[name]=1
+func (fl *fileList) newItem(name string) {
+	fl.items[name] = 1
 }
 
 func (fl *fileList) removeItem(name string) {
-	fl.items[name]=0
+	fl.items[name] = 0
 }
 
-
 func Close() {
-	_=db.Close()
+	_ = db.Close()
 }
 
 func removeOldDatabase() {
@@ -173,59 +169,37 @@ func randomDbName() string {
 	return name + DbFileSuff
 }
 
-func unmarshalBlcoks (p []byte) []*bep.BlockInfo {
+func unmarshalBlcoks(p []byte) []*bep.BlockInfo {
 	buf := bytes.NewBuffer(p)
-	blocks := make([]*bep.BlockInfo,0,0)
+	blocks := make([]*bep.BlockInfo, 0, 0)
 
 	for {
 		var l int64
-		err :=binary.Read(buf,binary.BigEndian,&l)
-		if err!=nil {
+		err := binary.Read(buf, binary.BigEndian, &l)
+		if err != nil {
 			break
 		}
-		b := make([]byte,l,l)
-		_,_ = buf.Read(b)
+		b := make([]byte, l, l)
+		_, _ = buf.Read(b)
 
 		block := new(bep.BlockInfo)
-		_=proto.Unmarshal(b,block)
-		blocks = append(blocks,block)
+		_ = proto.Unmarshal(b, block)
+		blocks = append(blocks, block)
 	}
 
 	return blocks
 }
 
-func marshalBlcoks (blocks []*bep.BlockInfo) ([]byte,error){
+func marshalBlcoks(blocks []*bep.BlockInfo) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
-	for _,b := range blocks {
-		if p,err:=proto.Marshal(b);err==nil{
+	for _, b := range blocks {
+		if p, err := proto.Marshal(b); err == nil {
 			l := int64(len(p))
-			_=binary.Write(buf,binary.BigEndian,l)
+			_ = binary.Write(buf, binary.BigEndian, l)
 			buf.Write(p)
-		}else {
-			return nil,err
+		} else {
+			return nil, err
 		}
 	}
-	return buf.Bytes(),nil
+	return buf.Bytes(), nil
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

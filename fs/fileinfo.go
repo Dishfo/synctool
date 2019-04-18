@@ -15,7 +15,7 @@ import (
 /**
 存储 fileinfo
 并把相关的fileInfo Id 记录在 update 或 index 里面
- */
+*/
 
 const (
 	fileInfoTableField = `
@@ -235,6 +235,22 @@ func fillFileInfo(rows *sql.Rows, info *bep.FileInfo) {
 	}
 
 	info.Blocks = unmarshalBlcoks(b)
+}
+
+func GernerateFileInfoInDel(folder, name string, e WrappedEvent) (*bep.FileInfo, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, errDbWrong
+	}
+	info, err := GetRecentInfo(tx, folder, name)
+	if err != nil {
+		return nil, errDbWrong
+	}
+	info.Deleted = true
+	info.Size = 0
+	info.ModifiedS = e.Mods
+	info.ModifiedNs = int32(e.ModNs - msTons*e.Mods)
+	return info, nil
 }
 
 //根据提供的文件绝对路径输出一个 fileinfo 指针
