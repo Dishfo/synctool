@@ -12,4 +12,4 @@
     indexUpdate ,来描述文件的变化.
     
     使用golang的http包来实现与用户进行交互的功能
-
+    使用sqlite数据库来完成数据的持久化
