@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"syncfolders/bep"
+	"syncfolders/fs"
 	"time"
 )
 
@@ -270,11 +271,8 @@ func createLink(filePath string, target string) error {
 }
 
 func hasNewerFile(info os.FileInfo, fileInfo *bep.FileInfo) bool {
-	if info.ModTime().UnixNano() >
-		(fileInfo.ModifiedS + int64(fileInfo.ModifiedNs)) {
-		return true
-	}
-	return false
+	return info.ModTime().UnixNano() >
+		(fileInfo.ModifiedS*fs.STons + int64(fileInfo.ModifiedNs))
 }
 
 const (

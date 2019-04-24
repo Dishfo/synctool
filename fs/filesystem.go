@@ -22,7 +22,7 @@ var (
 )
 
 var (
-	sTons           int64 = 1000000000
+	STons           int64 = 1000000000
 	ErrExistFolder        = errors.New("the folder has exist ")
 	ErrWatcherWrong       = errors.New("wrong occur create watcher ")
 )

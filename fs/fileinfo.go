@@ -241,23 +241,23 @@ func fillFileInfo(rows *sql.Rows, info *bep.FileInfo) {
 func GernerateFileInfoInDel(folder, name string, e WrappedEvent) (*bep.FileInfo, error) {
 	tx, err := GetTx()
 	if err != nil {
-		_=tx.Rollback()
+		_ = tx.Rollback()
 		return nil, errDbWrong
 	}
 	info, err := GetRecentInfo(tx, folder, name)
 	if err != nil {
-		_=tx.Rollback()
+		_ = tx.Rollback()
 		return nil, errDbWrong
 	}
 	if info == nil {
-		_=tx.Rollback()
-		return nil,errNoNeedInfo
+		_ = tx.Rollback()
+		return nil, errNoNeedInfo
 	}
-	_=tx.Commit()
+	_ = tx.Commit()
 	info.Deleted = true
 	info.Size = 0
 	info.ModifiedS = e.Mods
-	info.ModifiedNs = int32(e.ModNs - sTons*e.Mods)
+	info.ModifiedNs = int32(e.ModNs - STons*e.Mods)
 
 	return info, nil
 }

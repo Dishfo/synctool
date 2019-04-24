@@ -162,9 +162,7 @@ func (rwm *requestWaitingManager) NewTransaction(rs *requestSet) chan int {
 	for _, reqId := range rs.reqIds {
 		rwm.reqIdMap[int64(reqId)] = id
 	}
-
 	rwm.reqSetMap[id] = rs
-
 	for k := range rs.devReqMap {
 		devId := k
 		go func() {
@@ -186,7 +184,6 @@ func (rwm *requestWaitingManager) NewTransaction(rs *requestSet) chan int {
 	if rs.expectNum == 0 {
 		close(rs.wait)
 	}
-
 	return rs.wait
 }
 
@@ -246,7 +243,6 @@ func storeFileInfo(info *bep.FileInfo, folder string) (int64, error) {
 //todo
 //todo
 //todo (3个todo做标记 ^ __ ^)
-
 func (sm *SyncManager) syncFolder(folderId string) {
 	sm.folderLock.Lock()
 	if folder, ok := sm.folders[folderId]; !ok {
@@ -512,11 +508,8 @@ func chooseOneInfo(local, remote *bep.FileInfo) int {
 }
 
 func isNewer(local, remote *bep.FileInfo) bool {
-	if (local.ModifiedS + int64(local.ModifiedNs)) <
-		(remote.ModifiedS + int64(remote.ModifiedNs)) {
-		return true
-	}
-	return false
+	return (local.ModifiedS*fs.STons + int64(local.ModifiedNs)) <
+		(remote.ModifiedS*fs.STons + int64(remote.ModifiedNs))
 }
 
 func compareFilePart(local, remote *bep.FileInfo, dev node.DeviceId, folder string) []*FileBlock {
@@ -723,7 +716,8 @@ func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
 	var bak *fileBak
 	var err error
 	filePath, err := sm.GetRealPath(tFolder.Folder, tFolder.Name)
-
+	var needDelete = false
+	var needCreate = false
 	if err != nil {
 		return nil
 	}
@@ -734,26 +728,34 @@ func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
 	if !os.IsNotExist(err) {
 		if info.IsDir() {
 			log.Printf("%s has exist ", filePath)
-			return nil
+			needDelete = true
 		}
+
 		if hasNewerFile(info, tFolder.Dst) {
 			return nil
 		}
 
-		if info.IsDir() {
-			return nil
-		} else if IsLink(info) {
+		if IsLink(info) {
+			needCreate = true
 			bak, err = deleteLink(filePath, true)
 		} else {
+			needCreate = true
 			bak, err = deleteFile(filePath, true)
 		}
 	}
 
-	err = createFolder(filePath, permission)
-	if err != nil {
-
-		restoreBak(bak)
-		return nil
+	if !tFolder.Dst.Deleted {
+		if needCreate {
+			err = createFolder(filePath, permission)
+			if err != nil {
+				restoreBak(bak)
+				return nil
+			}
+		}
+	} else {
+		if needDelete {
+			deleteFolderWithOutBak(filePath)
+		}
 	}
 
 	return tFolder.Dst
@@ -781,6 +783,7 @@ func (sm *SyncManager) doSyncFile(tFile *TargetFile, blockSet *BlockSet) *bep.Fi
 	if !os.IsNotExist(err) {
 		log.Println("exist ", info.Name())
 		if hasNewerFile(info, tFile.Dst) {
+			log.Printf("local %s is newer ", tFile.Name)
 			return nil
 		}
 
