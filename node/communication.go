@@ -3,20 +3,26 @@ package node
 import (
 	"container/list"
 	"errors"
+	"log"
 )
 
 /**
 
 提供Connection 通讯方面的实现
- */
+*/
 var (
-	ErrNoSuchConnection = errors.New("no such a connection for writtings")
+	ErrNoSuchConnection = errors.New("no such a connection for writing")
 	ErrConnectionWrong  = errors.New("connection broken")
 )
 
-//todo 此处的锁策略是否会导致i/o效率下降
+//todo 此处的锁策略是否会导致i/o效率下降 加锁是为了防止i/o的错乱
 //SendMessage应该考虑到此时连接已不存在
-func (cm *ConnectionNode) SendMessage(id DeviceId, msg interface{}) error {
+func (cm *ConnectionNode) SendMessage(id DeviceId, msg interface{}) (funErr error) {
+	defer func() {
+		if funErr != nil {
+			log.Printf("node module %s when send \n", funErr.Error())
+		}
+	}()
 	cm.lock.Lock()
 	if c, ok := cm.connsMap[id]; ok {
 		cm.lock.Unlock()
@@ -30,6 +36,7 @@ func (cm *ConnectionNode) SendMessage(id DeviceId, msg interface{}) error {
 				err,
 				WriteOccasion,
 			}
+			log.Printf("%s inner error \n", err.Error())
 			return ErrConnectionWrong
 		}
 		return nil
@@ -44,7 +51,12 @@ func (cm *ConnectionNode) SendMessage(id DeviceId, msg interface{}) error {
 */
 type NotificationSet struct {
 	notifications map[DeviceId]*list.List
+}
 
+func newNs() *NotificationSet {
+	ns := new(NotificationSet)
+	ns.notifications = make(map[DeviceId]*list.List)
+	return ns
 }
 
 //用于通知一个device conneciton 变得不可用
@@ -54,7 +66,7 @@ type ConnectionNotification struct {
 }
 
 var (
-	ErrNoAvailabelConn = errors.New("has not a available connection")
+	ErrNoAvailabelConn = errors.New("has not a availabhnm le connection")
 )
 
 func (ns *NotificationSet) alarmNotification(remote DeviceId) {
@@ -63,8 +75,8 @@ func (ns *NotificationSet) alarmNotification(remote DeviceId) {
 			cno := e.Value.(*ConnectionNotification)
 			cno.Ready <- 1
 			old := e
-			nl.Remove(old)
 			e = e.Next()
+			nl.Remove(old)
 		}
 	}
 }
@@ -84,10 +96,9 @@ func (cm *ConnectionNode) RegisterNotification(remote DeviceId) (*ConnectionNoti
 		nl = list.New()
 		cm.ns.notifications[remote] = nl
 	}
-
 	n := new(ConnectionNotification)
 	n.Remote = remote
 	n.Ready = make(chan int)
-
+	nl.PushBack(n)
 	return n, nil
 }

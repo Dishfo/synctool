@@ -8,14 +8,13 @@ import (
 	"github.com/libp2p/go-libp2p-net"
 	"log"
 	"syncfolders/bep"
-	"time"
 )
 
 /**
 提供一系列的 msg byte 转化操作
 使用缓存的byte池进行msg的发送
 对于非法的数据构成同样应该进行切断
- */
+*/
 const CompressThresHold = 1024 * 1024
 const MagicNumber int32 = 0x2EA7D90B
 
@@ -47,14 +46,12 @@ func sendHello(s net.Stream, hello *bep.Hello) error {
 	}
 
 	buf.Write(data)
-	t := time.Now().Add(time.Second * 20)
-	err = s.SetWriteDeadline(t)
-	defer s.SetReadDeadline(time.Time{})
+
 	if err != nil {
 		panic(err)
 	}
 	_, err = s.Write(buf.Bytes())
-	log.Printf("write hello %p %s",hello,s.Conn().RemotePeer().Pretty())
+	log.Printf("write hello %p %s", hello, s.Conn().RemotePeer().Pretty())
 	return err
 }
 
@@ -76,18 +73,17 @@ func receiveHello(s net.Stream) (*bep.Hello, error) {
 		return nil, err
 	}
 
-	data := make([]byte,datalen,datalen)
-	err = readNByte(s,data,int(datalen))
+	data := make([]byte, datalen, datalen)
+	err = readNByte(s, data, int(datalen))
 	if err != nil {
 		return nil, err
 	}
-
 
 	err = proto.Unmarshal(data, hello)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("read hello %p %s",hello,s.Conn().RemotePeer().Pretty())
+	log.Printf("read hello %p %s", hello, s.Conn().RemotePeer().Pretty())
 	return hello, nil
 }
 
@@ -133,8 +129,8 @@ func wrapMessage(msg interface{}) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-	}else {
-		header.Compression =bep.MessageCompression_NONE
+	} else {
+		header.Compression = bep.MessageCompression_NONE
 	}
 
 	b := GetByteArray(len(data) + header.XXX_Size() + 4 + 2)
@@ -148,7 +144,6 @@ func wrapMessage(msg interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 
 	_, err = buf.Write(headerdata)
 	if err != nil {
@@ -178,6 +173,7 @@ func readNByte(s net.Stream, p []byte, n int) error {
 	var (
 		readn = 0
 	)
+
 	if n < 0 {
 		return errors.New("invaild length")
 	}
@@ -185,13 +181,12 @@ func readNByte(s net.Stream, p []byte, n int) error {
 	if len(p) < n {
 		return ErrShortSlice
 	}
-
 	for readn < n {
 		n, err := s.Read(p[readn:])
 		if err != nil {
 			return err
 		}
-		if n==0 {
+		if n == 0 {
 			break
 		}
 		readn += n

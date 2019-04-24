@@ -101,6 +101,7 @@ func NewConnectionNode(configs map[string]string) (*ConnectionNode, error) {
 	cn.connStates = make(map[DeviceId]*ConnectionFd)
 	cn.msgs = make(chan WrappedMessage)
 	cn.setStreamHandler()
+	cn.ns = newNs()
 	return cn, nil
 }
 
@@ -385,6 +386,7 @@ func (cm *ConnectionNode) afterEstablishConnection(c *Connection) {
 				if !ok {
 					return
 				}
+				log.Printf("%s when receive data \n", e.Error())
 				if cm.ConnectionState(c.remote) == Connected {
 					c.lock.Lock()
 					c.err = WrappedError{

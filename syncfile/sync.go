@@ -60,23 +60,12 @@ type SyncManager struct {
 	hostIds map[node.DeviceId]peer.ID
 	devices map[node.DeviceId]*bep.Device
 
-	rwm *requestWaittingManager
+	rwm *requestWaitingManager
 
 	inSendUpdateTranscation bool
 	inConnectionTranscation bool
 	//再同步事务中表示处理过的最后一个 update 对应的存储id
 	reqIdGenerator *int64
-}
-
-/**
-描述	设备间的共享关系
-*/
-type ShareRelation struct {
-	Id           int64
-	Folder       string
-	ReadOnly     bool
-	PeerReadOnly bool
-	Remote       node.DeviceId
 }
 
 type ReceiveIndex struct {
@@ -102,11 +91,11 @@ func NewSyncManager(fsys *fs.FileSystem,
 	sm.folders = make(map[string]*ShareFolder)
 
 	sm.tm = NewTaskManager()
+	sm.reqIdGenerator = new(int64)
 
 	sm.hostIds = make(map[node.DeviceId]peer.ID)
 	sm.devices = make(map[node.DeviceId]*bep.Device)
 	sm.rwm = newReqWaitManager(sm)
-	//sync logic 暂时未实现
 	sm.setupTimerTask()
 
 	return sm
@@ -141,6 +130,8 @@ func (sm *SyncManager) setupTimerTask() {
 			sm.prepareSendUpdate()
 		},
 	})
+
+	go sm.receiveWorker()
 
 	sm.tm.AddTask(Task{
 		Dur:  int64(time.Second * 10),

@@ -73,7 +73,7 @@ case create:
 }
 
 
-caculateUpdate {
+calculateUpdate {
 infoIds := make([]int64,0)
 for k,e := events {
 if e == delete {

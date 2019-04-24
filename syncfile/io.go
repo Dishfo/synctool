@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+//todo 事务的隔离等级是程序逻辑能否顺利执行的关键
 func (sm *SyncManager) receiveWorker() {
 	messages := sm.cn.Messages()
 
@@ -17,23 +18,27 @@ func (sm *SyncManager) receiveWorker() {
 				log.Println("message channel is not available")
 				return
 			}
-			log.Println(msg)
+			sm.receiveMsg(msg)
 		}
 	}
 }
 
 func (sm *SyncManager) receiveMsg(msg node.WrappedMessage) {
 	realmsg := msg.Msg
+
 	switch realmsg.(type) {
 	case *bep.IndexUpdate:
 		sm.handleUpdate(msg.Remote, realmsg.(*bep.IndexUpdate))
 	case *bep.Index:
 		sm.handleIndex(msg.Remote, realmsg.(*bep.Index))
 	case *bep.ClusterConfig:
+		onReceiveClusterConfig(msg.Remote, realmsg.(*bep.ClusterConfig))
 		sm.handleClusterConfig(msg.Remote, realmsg.(*bep.ClusterConfig))
 	case *bep.Request:
 		sm.handleRequest(msg.Remote, realmsg.(*bep.Request))
 	case *bep.Response:
+		log.Printf("receive resp ")
+		logStruct(realmsg.(*bep.Response))
 		sm.handleResponse(msg.Remote, realmsg.(*bep.Response))
 	}
 }
@@ -41,37 +46,55 @@ func (sm *SyncManager) receiveMsg(msg node.WrappedMessage) {
 func (sm *SyncManager) handleIndex(remote node.DeviceId,
 	index *bep.Index) {
 	tx, err := db.Begin()
+
 	if err != nil {
 		log.Fatalf("%s when receice index %s %s ",
 			err.Error(), index.Folder, remote.String())
 	}
+
 	if !HasRelation(tx, index.Folder, remote) {
+		tx.Commit()
 		return
 	}
-	sm.temporaryIndex(remote, index)
+
+	tx.Commit()
+	err = sm.temporaryIndex(remote, index)
+	for err != nil {
+		log.Printf("repeat for %s \n", err.Error())
+		err = sm.temporaryIndex(remote, index)
+	}
+	log.Println("compete")
 }
 
 func (sm *SyncManager) handleUpdate(remote node.DeviceId,
 	update *bep.IndexUpdate) {
 	tx, err := db.Begin()
+
 	if err != nil {
 		log.Fatalf("%s when receice index %s %s ",
 			err.Error(), update.Folder, remote.String())
 	}
 
 	if !HasRelation(tx, update.Folder, remote) {
+		tx.Commit()
 		return
 	}
-	sm.temporaryUpdate(remote, update)
+	tx.Commit()
+
+	err = sm.temporaryUpdate(remote, update)
+	for err != nil {
+		log.Printf("repeat for %s \n", err.Error())
+		err = sm.temporaryUpdate(remote, update)
+	}
+
+	log.Println("compete")
 }
 
-/**
-共享关系中如果新的共享关系中意味一个旧的关系移除
-程序本社还要确认是否有共享关系被移除
-*/
-//todo 锁策略完善
+//先确立连接后 在发送 config  保证任何一方不会丢失数据
 func (sm *SyncManager) handleClusterConfig(remote node.DeviceId,
 	config *bep.ClusterConfig) {
+	log.Printf("%s receied from %s ", config.String(),
+		remote.String())
 	tx, err := db.Begin()
 	if err != nil {
 		log.Panic(err)
@@ -131,12 +154,12 @@ func (sm *SyncManager) handleRequest(remote node.DeviceId,
 //handleResponse 暂时缓存resp resp 提交给对应的同步任务
 func (sm *SyncManager) handleResponse(remote node.DeviceId,
 	resp *bep.Response) {
-
+	sm.rwm.Present(resp)
 }
 
 //缓存 index
 func (sm *SyncManager) temporaryIndex(remote node.DeviceId,
-	index *bep.Index) {
+	index *bep.Index) error {
 	ri := &ReceiveIndex{
 		remote:    remote,
 		index:     index,
@@ -146,20 +169,21 @@ func (sm *SyncManager) temporaryIndex(remote node.DeviceId,
 	if err != nil {
 		panic(err)
 	}
-
+	log.Println("remoteID ", remote)
 	_, err = StoreReceiveIndex(tx, ri)
 	if err != nil {
 		log.Printf("%s when cache received index ",
 			err.Error())
 		_ = tx.Rollback()
-		return
+		return err
 	}
 
-	_ = tx.Commit()
+	err = tx.Commit()
+	return err
 }
 
 func (sm *SyncManager) temporaryUpdate(remote node.DeviceId,
-	update *bep.IndexUpdate) {
+	update *bep.IndexUpdate) error {
 	ri := &ReceiveIndexUpdate{
 		remote:    remote,
 		update:    update,
@@ -169,16 +193,16 @@ func (sm *SyncManager) temporaryUpdate(remote node.DeviceId,
 	if err != nil {
 		panic(err)
 	}
-
+	log.Println("remoteID ", remote)
 	_, err = StoreReceiveUpadte(tx, ri)
 	if err != nil {
 		log.Printf("%s when cache received index ",
 			err.Error())
 		_ = tx.Rollback()
-		return
+		return err
 	}
-	_ = tx.Commit()
-
+	err = tx.Commit()
+	return err
 }
 
 func containDevice(remote node.DeviceId, devices []string) bool {

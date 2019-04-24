@@ -134,6 +134,7 @@ func newFolderNode(folder string) *FolderNode {
 	fn.eventId = new(int64)
 	fn.eventSet = NewEventSet()
 	fn.updateIds = make([]int64, 0)
+	fn.blockFiles = make(map[string]bool)
 	fn.events = make(chan WrappedEvent, 1024)
 	return fn
 }
@@ -182,12 +183,12 @@ func (fs *FileSystem) initFileList(fl *fileList, real string) {
 		fl.items[f] = 1
 	}
 
-	fs.caculateIndex(fl.folder)
+	fs.calculateIndex(fl.folder)
 	close(fl.ready)
 }
 
-//caculateIndex 计算出 folder 的初始index 把对应设置当 fnode 中
-func (fs *FileSystem) caculateIndex(folder string) IndexSeq {
+//calculateIndex 计算出 folder 的初始index 把对应设置当 fnode 中
+func (fs *FileSystem) calculateIndex(folder string) IndexSeq {
 	fn := fs.folders[folder]
 	indexSeq := IndexSeq{}
 	base := fn.fl.real
@@ -269,7 +270,7 @@ func (fs *FileSystem) GetIndex(folder string) *bep.Index {
 
 func (fs *FileSystem) GetUpdates(folder string) []*bep.IndexUpdate {
 	updates := make([]*bep.IndexUpdate, 0)
-	fs.lock.RUnlock()
+	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
 		f.fl.lock.RLock()
 		defer f.fl.lock.RUnlock()
@@ -306,10 +307,9 @@ func GetUpdate(folder string, id int64) []*bep.IndexUpdate {
 			}
 			update.Files = append(update.Files, info)
 		}
-
 		updates = append(updates, update)
 	}
-
+	_ = tx.Commit()
 	return updates
 }
 
@@ -370,20 +370,25 @@ func (fs *FileSystem) handleEvents(folder string) {
 			fs.handleEvent(e, folder)
 		case <-ticker.C:
 			if fn.shouldCaculateUpadte() {
-				fs.caculateUpdate(fn)
+				fs.calculateUpdate(fn)
 			}
 		}
 	}
 }
 
 func (fn *FolderNode) cacheEvent(e WrappedEvent) {
+	folder := fn.fl.real
+	name, _ := filepath.Rel(folder, e.Name)
+	if fn.IsBlock(name) {
+		return
+	}
 	select {
 	case fn.events <- e:
 	default:
 	}
 }
 
-func setInvaild(folder, name string) {
+func setInvalid(folder, name string) {
 	tx, err := GetTx()
 	if err != nil {
 		log.Panicf("%s when receive a write Event on %s",
@@ -397,7 +402,6 @@ func setInvaild(folder, name string) {
 	_ = tx.Commit()
 }
 
-//todo 加锁以确保线程安全 好丑啊
 func (fs *FileSystem) handleEvent(e WrappedEvent, folder string) {
 	fs.lock.Lock()
 	fn, ok := fs.folders[folder]
@@ -410,21 +414,16 @@ func (fs *FileSystem) handleEvent(e WrappedEvent, folder string) {
 	e.Name = name
 	switch e.Op {
 	case fsnotify.Remove:
-		setInvaild(folder, e.Name)
+		setInvalid(folder, e.Name)
 		fn.eventSet.NewEvent(e)
 	case fsnotify.Write:
-		setInvaild(folder, e.Name)
+		setInvalid(folder, e.Name)
 		fn.eventSet.NewEvent(e)
 	case fsnotify.Create:
 		fn.fl.newItem(e.Name)
 		fn.eventSet.NewEvent(e)
 	case fsnotify.Rename:
-		delE := WrappedEvent{
-			Mods:  e.Mods,
-			ModNs: e.ModNs,
-			Event: e.Event,
-		}
-		fn.eventSet.NewEvent(delE)
+		setInvalid(folder, e.Name)
 		fn.eventSet.NewEvent(e)
 	}
 
@@ -451,12 +450,13 @@ func (fs *FileSystem) findRenameFile(folder string) string {
 }
 
 //根	据fodeNode
-func (fs *FileSystem) caculateUpdate(fn *FolderNode) {
+func (fs *FileSystem) calculateUpdate(fn *FolderNode) {
 	select {
 	case <-fn.stop:
 		return
 	default:
 	}
+
 	lists := fn.eventSet.AvailableList()
 	indexSeq := new(IndexSeq)
 	indexSeq.Folder = fn.fl.folder
@@ -510,7 +510,8 @@ func newFileInfo(
 	ele := l.Back()
 	name = filepath.Join(fn.fl.real, ele.Name)
 
-	if ele.Op == fsnotify.Remove {
+	if ele.Op == fsnotify.Remove ||
+		ele.Op == fsnotify.Rename {
 		info, err = GernerateFileInfoInDel(fn.fl.folder,
 			ele.Name, ele.WrappedEvent)
 		if err != nil {
@@ -550,7 +551,7 @@ func newFileInfo(
 			_ = tx.Rollback()
 			return ids, errDbWrong
 		}
-		log.Println(info)
+
 		l.BackWard(ele)
 		ids = append(ids, id)
 		_ = tx.Commit()
@@ -567,7 +568,6 @@ func getRealFileList(base string) []string {
 	if err != nil {
 		return files
 	}
-
 	for _, info := range infos {
 		lock.Lock()
 		files = append(files, info.Name())
@@ -584,7 +584,6 @@ func getRealFileList(base string) []string {
 			}()
 		}
 	}
-
 	wg.Wait()
 	return files
 }
@@ -614,6 +613,7 @@ func getRealFileList1(base, parent string) []string {
 GetIndexUpdates 根据输入的 indexSeq ，返回对应的
 index 和 indexUpdate
 */
+
 func (fs *FileSystem) GetIndexUpdates(indexSeqs []*IndexSeq) (map[int64]*bep.Index,
 	map[int64]*bep.IndexUpdate) {
 	indexs := make(map[int64]*bep.Index)
@@ -625,12 +625,12 @@ func (fs *FileSystem) GetIndexUpdates(indexSeqs []*IndexSeq) (map[int64]*bep.Ind
 	for _, indexSeq := range indexSeqs {
 		if fs.getFolderIndexId(indexSeq.Folder) == indexSeq.Id {
 			index, err := GetIndex(tx, indexSeq)
-			if err != nil {
+			if err == nil {
 				indexs[indexSeq.Id] = index
 			}
 		} else {
 			update, err := GetIndexUpdate(tx, indexSeq)
-			if err != nil {
+			if err == nil {
 				updates[indexSeq.Id] = update
 			}
 		}
@@ -648,7 +648,12 @@ func (fs *FileSystem) getFolderIndexId(folderId string) int64 {
 	return -1
 }
 
-func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) []byte {
+var (
+	ErrNoSuchFile  = errors.New("no such file")
+	ErrInvalidSize = errors.New("except size is invalid")
+)
+
+func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]byte, error) {
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
 		fs.lock.RUnlock()
@@ -656,17 +661,17 @@ func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) []b
 		filePath := filepath.Join(realPath, name)
 		fPtr, err := os.Open(filePath)
 		if err != nil {
-			return nil
+			return nil, ErrNoSuchFile
 		}
 		data := make([]byte, int(size))
 		n, err := fPtr.ReadAt(data, offset)
 		if err != nil || n != int(size) {
-			return nil
+			return nil, ErrInvalidSize
 		}
-		return data
+		return data, nil
 	} else {
 		fs.lock.RUnlock()
-		return nil
+		return nil, ErrNoSuchFile
 	}
 }
 
@@ -713,25 +718,23 @@ func (fs *FileSystem) GetBlock(req *bep.Request) *bep.Response {
 		return resp
 	}
 
-	if !info.Invalid {
+	if info.Invalid {
 		resp.Code = bep.ErrorCode_INVALID_FILE
 		return resp
 	}
 
-	f, err := os.Open(file)
-	//todo 判断文件存在的方法有误
-	if !os.IsNotExist(err) {
+	b, err := fs.GetData(req.Folder, req.Name,
+		req.Offset,
+		req.Size)
+
+	if err == ErrNoSuchFile {
 		resp.Code = bep.ErrorCode_NO_SUCH_FILE
 		return resp
 	}
 
-	b := make([]byte, req.Size)
-	if err != nil {
-		n, err := f.ReadAt(b, req.Offset)
-		if err != nil || n != int(req.Size) {
-			resp.Code = bep.ErrorCode_GENERIC
-			return resp
-		}
+	if err == ErrInvalidSize {
+		resp.Code = bep.ErrorCode_GENERIC
+		return resp
 	}
 
 	hash := md5.Sum(b)
@@ -779,6 +782,10 @@ func (fs *FileSystem) DisableCaculateUpdate(folder string) {
 	} else {
 		fs.lock.RUnlock()
 	}
+}
+
+func SetLocalId(id node.DeviceId) {
+	LocalUser = id
 }
 
 func (fs *FileSystem) EnableCaculateUpdate(folder string) {

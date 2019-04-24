@@ -16,12 +16,26 @@ import (
 /**
 用于提供http handler
 */
-
+//node io 通信模块出现问题
 var (
-	cn   *node.ConnectionNode = nil
-	fsys *fs.FileSystem
-	sm   *syncfile.SyncManager
+	cn                 *node.ConnectionNode = nil
+	fsys               *fs.FileSystem
+	sm                 *syncfile.SyncManager
+	defaultSyncVersion = "sync1.0.0"
+	defaultClientName  = "sync"
 )
+
+type H struct {
+}
+
+func (h H) ConfirmHello(hello *bep.Hello) bool {
+	if hello.ClientVersion != defaultSyncVersion {
+		return false
+	} else if hello.ClientName != defaultClientName {
+		return false
+	}
+	return true
+}
 
 func initNode() {
 	var err error
@@ -29,6 +43,12 @@ func initNode() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	node.ClientName = defaultClientName
+	node.ClientVersion = defaultSyncVersion
+	name, _ := cn.Ids()
+	node.DeviceName = name
+	node.RegisterHandShake(H{})
+
 }
 
 func initFs() {
@@ -37,6 +57,7 @@ func initFs() {
 
 func initSync() {
 	sm = syncfile.NewSyncManager(fsys, cn)
+	fs.SetLocalId(sm.LocalId())
 }
 
 func nodeId(w http.ResponseWriter, r *http.Request) {
@@ -46,13 +67,14 @@ func nodeId(w http.ResponseWriter, r *http.Request) {
 		"P2P":    hostId,
 	}
 
-	data, err := json.Marshal(&m)
+	data, err := json.MarshalIndent(&m, "", " ")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(data)
 	}
+
 }
 
 const (
@@ -117,7 +139,6 @@ const (
 func AddDevice(w http.ResponseWriter, r *http.Request) {
 	device := new(bep.Device)
 	_ = r.ParseForm()
-
 	err := parseDevice(r.Form, device)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -153,12 +174,79 @@ func FolderInfos(w http.ResponseWriter, r *http.Request) {
 }
 
 func getIndexData(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	folderId := r.PostForm.Get("FolderId")
+	index := fsys.GetIndex(folderId)
+	data, err := json.MarshalIndent(index, "", " ")
+	if err == nil {
+		_, _ = w.Write(data)
+	} else {
+		_, _ = w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
 
+func getFileData(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	folder := r.PostForm.Get("Folder")
+	name := r.PostForm.Get("Name")
+	offSetStr := r.PostForm.Get("Offset")
+	SizeStr := r.PostForm.Get("Size")
+
+	tmp, _ := strconv.ParseInt(offSetStr, 10, 64)
+	offset := tmp
+	tmp, _ = strconv.ParseInt(SizeStr, 10, 32)
+	size := int32(tmp)
+	data, err := fsys.GetData(folder, name, offset, size)
+	if err != nil {
+		_, _ = w.Write([]byte(err.Error()))
+	} else {
+		_, _ = w.Write(data)
+
+	}
+}
+
+func getIndexSeq(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	folderId := r.PostForm.Get("FolderId")
+	seqStr := r.PostForm.Get("seq")
+	seq, _ := strconv.ParseInt(seqStr, 10, 64)
+	tx, err := fs.GetTx()
+	if err != nil {
+		panic(err)
+	}
+	defer tx.Commit()
+	indexSeqs, err := fs.GetIndexSeqAfter(tx, int64(seq), folderId)
+	if err != nil {
+		panic(err)
+	} else {
+		data, err := json.MarshalIndent(indexSeqs, "", "  ")
+		if err == nil {
+			_, _ = w.Write(data)
+		} else {
+			_, _ = w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}
+}
+
+func getUpdateData(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	folderId := r.PostForm.Get("FolderId")
+	updates := fsys.GetUpdates(folderId)
+	data, err := json.MarshalIndent(updates, "", " ")
+	if err == nil {
+		_, _ = w.Write(data)
+	} else {
+		_, _ = w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func parseFolderOpt(data url.Values,
 	opt *syncfile.FolderOption) error {
 	var err error
+	log.Println(data)
 	opt.Id = data.Get("Id")
 	opt.ReadOnly, err = strconv.ParseBool(data.Get("ReadOnly"))
 	if err != nil {

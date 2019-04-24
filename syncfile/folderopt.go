@@ -46,8 +46,7 @@ func (share *ShareFolder) Copy(s *ShareFolder) {
 	share.Label = s.Label
 	share.IgnorePermissions = s.IgnorePermissions
 	share.Real = s.Real
-	share.Devices = make([]string, len(s.Devices), len(s.Devices))
-
+	share.Devices = make([]string, len(s.Devices))
 	copy(share.Devices, s.Devices)
 }
 
@@ -58,14 +57,13 @@ func (share *ShareFolder) Attribute() *FolderAttribute {
 	attr.Label = share.Label
 	attr.ReadOnly = share.ReadOnly
 	attr.Real = share.Real
-	attr.Devices = make([]string, len(share.Devices), len(share.Devices))
+	attr.Devices = make([]string, len(share.Devices))
 	copy(attr.Devices, share.Devices)
-
 	return attr
 }
 
 /**
-shareFolde 的一个视图
+shareFolder 的一个视图
 */
 type FolderAttribute struct {
 	Id                string
@@ -85,6 +83,8 @@ var (
 	ErrNonsexist       = errors.New("folder doesn't exist")
 )
 
+//todo 对于其他设备需要确认 共享关系是否发生变化
+//todo 对于本地同样需要关注共享关系是否变化,此时需要获取到已有的config进行计算
 func (sm *SyncManager) AddFolder(opt *FolderOption) error {
 	if opt == nil || opt.Id == "" {
 		return ErrInvalidFolderId
@@ -101,8 +101,10 @@ func (sm *SyncManager) AddFolder(opt *FolderOption) error {
 		return ErrRepeatFolderId
 	}
 
-	sm.folders[opt.Id] = newShareFolder(opt)
+	f := newShareFolder(opt)
+	sm.folders[opt.Id] = f
 	sm.folderLock.Unlock()
+	sm.onAddFolder(f)
 	sm.onFoldersChange()
 
 	return nil
@@ -134,7 +136,7 @@ func newShareFolder(opt *FolderOption) *ShareFolder {
 	return share
 }
 
-//修改 folder 属性
+//修改folder属性
 func (sm *SyncManager) EditFolder(opts map[string]interface{},
 	folderId string) error {
 	sm.folderLock.Lock()
@@ -189,12 +191,73 @@ func (sm *SyncManager) onFoldersChange() {
 	for _, dev := range devIds {
 		err := sm.SendMessage(dev, config)
 		if err != nil {
+			sm.cn.DisConnect(dev)
 			sm.onDisConnected(dev)
 		}
 	}
 }
 
-//修正标记位  表示sync 模块开始进行
+//callback when add a folder
+func (sm *SyncManager) onAddFolder(folder *ShareFolder) {
+	localId := sm.LocalId()
+	for _, dev := range folder.Devices {
+		devId, err := node.GenerateIdFromString(dev)
+		if err != nil {
+			continue
+		}
+
+		img := getFoldersImages(devId)
+		if img == nil {
+			continue
+		}
+
+		for _, f := range img.folders {
+			if f.Id == folder.Id {
+				r := calculateRelations(folder, f, localId)
+				if r == nil {
+					continue
+				}
+				r.Remote = devId
+				tx, err := db.Begin()
+				if err != nil {
+					panic(err)
+				}
+				_, err = StoreRelation(tx, r)
+				if err != nil {
+					log.Printf("%s when  store relations ",
+						err.Error())
+					_ = tx.Rollback()
+				} else {
+					_ = tx.Commit()
+				}
+			}
+		}
+	}
+}
+
+//used by onAddFolder
+func calculateRelations(sf *ShareFolder,
+	f *bep.Folder, localId node.DeviceId) *ShareRelation {
+	var relation *ShareRelation = nil
+	for _, dev := range f.Devices {
+		devId := node.GenerateIdFromBytes(dev.Id)
+		if devId == localId {
+			relation = new(ShareRelation)
+			relation.Folder = sf.Id
+			relation.ReadOnly = sf.ReadOnly
+			relation.PeerReadOnly = f.ReadOnly
+			return relation
+		}
+	}
+	return relation
+}
+
+//callback when edit options of a folder
+func (sm *SyncManager) onEditFolder(folder *ShareFolder) {
+
+}
+
+//修正标记位表示sync模块开始进行
 func (sm *SyncManager) StartSendUpdate() bool {
 	sm.folderLock.Lock()
 	defer sm.folderLock.Unlock()
@@ -212,8 +275,8 @@ func (sm *SyncManager) EndSendUpdate() {
 	sm.inSendUpdateTranscation = false
 }
 
-//todo 将这里的数据库操作分割到多个事务中
-
+//使用重试 ?????? 添加针对 database locked 测试阶段先不要添加
+//todo 我还要靠这个找bug ^ __ ^
 //定期执行的任务 修改逻辑避事务中穿插过多的 i/o
 func (sm *SyncManager) prepareSendUpdate() {
 	var err error
@@ -222,27 +285,35 @@ func (sm *SyncManager) prepareSendUpdate() {
 	if !sm.StartSendUpdate() {
 		return
 	}
+
 	defer sm.EndSendUpdate()
 
 	devIds := sm.getConnectedDevice()
 	otx, err = fs.GetTx()
 	if err != nil {
-		panic(err)
+		log.Printf("%s when preparet to send updates ",
+			err.Error())
+		return
 	}
 
 	tx, err = db.Begin()
 	if err != nil {
-		panic(err)
+		log.Printf("%s when preparet to send updates ",
+			err.Error())
+		_ = otx.Rollback()
+		return
 	}
 
 	for _, dev := range devIds {
 		relations, err := GetRelationOfDevice(tx, dev)
+
 		if err != nil {
 			log.Printf(" %s when get relations of %s ",
 				err.Error(), dev.String())
 			goto end
 		}
 		for _, relation := range relations {
+
 			if relation.PeerReadOnly {
 				continue
 			}
@@ -257,23 +328,28 @@ func (sm *SyncManager) prepareSendUpdate() {
 				tagMap[su.UpdateId] = true
 			}
 			indexSeqs, err := fs.GetIndexSeqAfter(otx, 0, relation.Folder)
+
 			if err != nil {
-				log.Printf(" %s when get indexSeqs of %s ",
+				log.Printf(" %s whecd n get indexSeqs of %s ",
 					err.Error(), dev.String())
 				goto end
 			}
 			readySend := make([]*fs.IndexSeq, 0)
 			for _, indexSeq := range indexSeqs {
 				if !tagMap[indexSeq.Id] {
+
 					readySend = append(readySend, indexSeq)
 				}
 			}
+
 			indexs, updates := sm.getUpdatesByIndexSeq(readySend)
 			for id, index := range indexs {
+				log.Println(index)
 				sm.sendUpdate(dev,
 					index, relation.Folder, tx, id)
 			}
 			for id, update := range updates {
+				log.Println(update)
 				sm.sendUpdate(dev,
 					update, relation.Folder, tx, id)
 			}
@@ -298,8 +374,16 @@ func (sm *SyncManager) sendUpdate(remote node.DeviceId,
 			UpdateId: uid,
 			Remote:   remote,
 		}
-		_, _ = StoreSendUpdate(tx, su)
+		id, err := StoreSendUpdate(tx, su)
+		log.Println(id)
+		if err != nil {
+			log.Println(err.Error())
+		}
+	} else {
+		log.Println(err.Error())
+		sm.DisConnection(remote)
 	}
+
 }
 
 //严格区分index indexUpdate

@@ -128,8 +128,10 @@ func (sm *SyncManager) preparedConnect() {
 					sm.hasConnected(id)
 				}
 			}
-			log.Printf("%s when connection %s", err.Error(),
-				id.String())
+			if err != nil {
+				log.Printf("%s when connection %s", err.Error(),
+					id.String())
+			}
 			wg.Done()
 		}()
 	}
@@ -178,6 +180,7 @@ func (sm *SyncManager) hasConnected(id node.DeviceId) {
 	} else {
 		sm.devLock.Lock()
 		sm.connectFlag[id] = true
+		log.Println("succeed connection")
 		sm.devLock.Unlock()
 	}
 }
