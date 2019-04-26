@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"syncfolders/bep"
 	"time"
 )
@@ -49,7 +48,7 @@ const (
 	create table FileInfo (
 	id integer not null primary key autoincrement,
 	folder text,
-	name text,
+	Name text,
 	type integer,
 	size integer,
 	permissions integer,
@@ -105,49 +104,7 @@ func init() {
 
 }
 
-type fileList struct {
-	folder string
-	real   string
-	items  map[string]int
-	lock   sync.RWMutex
-	ready  chan int
-}
-
-/**
-todo 事务处理中应该有更加细致的隔离等级划分
-*/
-func GetTx() (*sql.Tx, error) {
-
-	return db.Begin()
-}
-
-func newFileList(folder string) *fileList {
-	fl := new(fileList)
-	fl.folder = folder
-	fl.items = make(map[string]int)
-	fl.ready = make(chan int)
-	return fl
-}
-
-func (fl *fileList) getItems() []string {
-	items := make([]string, 0)
-	for k, v := range fl.items {
-		if v > 0 {
-			items = append(items, k)
-		}
-	}
-	return items
-}
-
-func (fl *fileList) newItem(name string) {
-	fl.items[name] = 1
-}
-
-func (fl *fileList) removeItem(name string) {
-	fl.items[name] = 0
-}
-
-func Close() {
+func dbClose() {
 	_ = db.Close()
 }
 
@@ -201,4 +158,9 @@ func marshalBlcoks(blocks []*bep.BlockInfo) ([]byte, error) {
 		}
 	}
 	return buf.Bytes(), nil
+}
+
+func GetTx() (*sql.Tx, error) {
+
+	return db.Begin()
 }

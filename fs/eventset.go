@@ -1,8 +1,8 @@
 package fs
 
 import (
-	"github.com/fsnotify/fsnotify"
 	"sync"
+	"syncfolders/fswatcher"
 )
 
 /**
@@ -98,7 +98,7 @@ uid := storeUpdate(infoIdss
 */
 
 type WrappedEvent struct {
-	fsnotify.Event
+	fswatcher.Event
 	Mods  int64
 	ModNs int64
 }

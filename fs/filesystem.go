@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	"errors"
-	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
 	"log"
 	"os"
@@ -12,8 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"syncfolders/bep"
+	"syncfolders/fswatcher"
 	"syncfolders/node"
-	"syncfolders/watcher"
 	"time"
 )
 
@@ -27,56 +26,8 @@ var (
 	ErrWatcherWrong       = errors.New("wrong occur create watcher ")
 )
 
-/**
-func shieldFile(name string)
-func Unblock(name string)
-*/
-
-type FolderNode struct {
-	fl             *fileList
-	w              *watcher.FolderWatcher
-	versionSeq     *uint64
-	eventId        *int64
-	indexSeq       int64
-	lastUpdate     int64
-	eventSet       *EventSet
-	updateIds      []int64
-	disableUpdater bool
-	blockFiles     map[string]bool
-	events         chan WrappedEvent
-	stop           chan int //用于标记这个node已失效
-}
-
-func (fn *FolderNode) shieldFile(name string) {
-	fn.fl.lock.Lock()
-	defer fn.fl.lock.Unlock()
-	fn.blockFiles[name] = true
-}
-
-func (fn *FolderNode) unblock(name string) {
-	fn.fl.lock.Lock()
-	defer fn.fl.lock.Unlock()
-	fn.blockFiles[name] = false
-}
-
-func (fn *FolderNode) IsBlock(name string) bool {
-	fn.fl.lock.RLock()
-	defer fn.fl.lock.RUnlock()
-	return fn.blockFiles[name]
-}
-
-//DisableUpdate will turn off auto caculate udpate function
-func (fn *FolderNode) DisableUpdate() {
-	fn.disableUpdater = true
-}
-
-func (fn *FolderNode) EnableUpdate() {
-	fn.disableUpdater = false
-}
-
 func (fn *FolderNode) shouldCaculateUpadte() bool {
-	fn.fl.lock.RLock()
-	defer fn.fl.lock.RUnlock()
+
 	return !fn.disableUpdater
 }
 
@@ -100,43 +51,32 @@ func (fn *FolderNode) NextCounter() *bep.Counter {
 }
 
 //AddFolder ....................
-func (fs *FileSystem) AddFolder(folder string, real string) error {
+func (fs *FileSystem) AddFolder(folderId string, real string) error {
 	fs.lock.Lock()
-	if _, ok := fs.folders[folder]; ok {
+	if _, ok := fs.folders[folderId]; ok {
 		fs.lock.Unlock()
 		return ErrExistFolder
 	} else {
-		fn := newFolderNode(folder)
-		fs.folders[folder] = fn
-		w, err := watcher.NewWatcher()
+		fn := newFolderNode(folderId, real)
+		fs.folders[folderId] = fn
+		w, err := fswatcher.NewWatcher(real)
 		if err != nil {
 			fs.lock.Unlock()
 			return ErrWatcherWrong
 		}
 		fn.w = w
-		_ = w.SetFolder(real)
-		go fs.receiveEvent(folder)
-		go fs.handleEvents(folder)
-		fn.fl.lock.Lock()
-		defer fn.fl.lock.Unlock()
+		err = fn.initNode()
+		if err != nil {
+			return err
+		}
+
 		fs.lock.Unlock()
-		fs.initFileList(fn.fl, real)
+		fs.initFolderIndex(folderId)
+
+		go fs.receiveEvent(folderId)
+		go fs.handleEvents(folderId)
 	}
 	return nil
-}
-
-func newFolderNode(folder string) *FolderNode {
-	fn := new(FolderNode)
-	fn.versionSeq = new(uint64)
-	*fn.versionSeq = 0
-	fn.fl = newFileList(folder)
-	fn.stop = make(chan int)
-	fn.eventId = new(int64)
-	fn.eventSet = NewEventSet()
-	fn.updateIds = make([]int64, 0)
-	fn.blockFiles = make(map[string]bool)
-	fn.events = make(chan WrappedEvent, 1024)
-	return fn
 }
 
 func (fs *FileSystem) RemoveFolder(folder string) {
@@ -153,13 +93,8 @@ func (fs *FileSystem) RemoveFolder(folder string) {
 func (fs *FileSystem) GetFileList(folder string) []string {
 	fs.lock.RLock()
 	if fn, ok := fs.folders[folder]; ok {
-		select {
-		case <-fn.fl.ready:
-		}
-		fn.fl.lock.RLock()
-		defer fn.fl.lock.RUnlock()
 		fs.lock.RUnlock()
-		return fn.fl.getItems()
+		return fn.getFiles()
 	} else {
 		fs.lock.RUnlock()
 		return []string{}
@@ -167,64 +102,41 @@ func (fs *FileSystem) GetFileList(folder string) []string {
 }
 
 //设置  fl 的文件列表
-func (fs *FileSystem) initFileList(fl *fileList, real string) {
-	select {
-	case _, ok := <-fl.ready:
-		if !ok {
-			return
-		}
-	default:
-	}
-
-	fl.items = make(map[string]int)
-	fl.real = real
-	files := getRealFileList(real)
-	for _, f := range files {
-		fl.items[f] = 1
-	}
-
-	fs.calculateIndex(fl.folder)
-	close(fl.ready)
+func (fs *FileSystem) initFolderIndex(folderId string) {
+	fn := fs.folders[folderId]
+	fs.calculateIndex(fn)
 }
 
 //calculateIndex 计算出 folder 的初始index 把对应设置当 fnode 中
-func (fs *FileSystem) calculateIndex(folder string) IndexSeq {
-	fn := fs.folders[folder]
+//此时的index 可能并不一定是最新
+func (fs *FileSystem) calculateIndex(fn *FolderNode) {
+	if fn == nil {
+		return
+	}
+
 	indexSeq := IndexSeq{}
-	base := fn.fl.real
-	items := fn.fl.getItems()
-	version := &bep.Vector{
-		Counters: []*bep.Counter{
-			{
-				Id:    uint64(LocalUser),
-				Value: atomic.AddUint64(fn.versionSeq, 1),
-			},
-		},
+
+	index := fn.calculateIndex()
+	for _, info := range index.Files {
+		tx, err := GetTx()
+		if err != nil {
+			panic(err)
+		}
+		id, err := StoreFileinfo(tx, fn.folderId, info)
+		if err != nil {
+			log.Printf("%s when init index ", err.Error())
+			_ = tx.Rollback()
+			continue
+		}
+		_ = tx.Commit()
+		indexSeq.Seq = append(indexSeq.Seq, id)
 	}
 
 	tx, err := GetTx()
 	if err != nil {
-		log.Fatalf(" %s when prepare generate index ", err.Error())
+		//handle error
 	}
-	for _, item := range items {
-		info, err := GenerateFileInfo(filepath.Join(base, item))
-		if err != nil {
-			log.Panicf("%s when init index ", err.Error())
-			continue
-		} else {
-			info.Version = version
-			info.ModifiedBy = uint64(LocalUser)
-			info.Name = item
-			id, err := StoreFileinfo(tx, folder, info)
-			if err != nil {
-				log.Panicf("%s when init index ", err.Error())
-				continue
-			}
-			indexSeq.Seq = append(indexSeq.Seq, id)
-		}
-	}
-
-	indexSeq.Folder = folder
+	indexSeq.Folder = fn.folderId
 	id, err := StoreIndexSeq(tx, indexSeq)
 	if err != nil {
 		_ = tx.Rollback()
@@ -233,7 +145,7 @@ func (fs *FileSystem) calculateIndex(folder string) IndexSeq {
 	indexSeq.Id = id
 	fn.indexSeq = id
 	_ = tx.Commit()
-	return indexSeq
+
 }
 
 func (fs *FileSystem) GetIndex(folder string) *bep.Index {
@@ -252,6 +164,12 @@ func (fs *FileSystem) GetIndex(folder string) *bep.Index {
 			_ = tx.Rollback()
 			panic(err)
 		}
+
+		if indexSeq == nil {
+			_ = tx.Commit()
+			return index
+		}
+
 		for _, n := range indexSeq.Seq {
 			info, err := GetInfoById(tx, n)
 			if err != nil {
@@ -272,8 +190,7 @@ func (fs *FileSystem) GetUpdates(folder string) []*bep.IndexUpdate {
 	updates := make([]*bep.IndexUpdate, 0)
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
-		f.fl.lock.RLock()
-		defer f.fl.lock.RUnlock()
+
 		fs.lock.RUnlock()
 		return GetUpdate(folder, f.indexSeq)
 	} else {
@@ -324,7 +241,7 @@ func (fs *FileSystem) receiveEvent(folder string) {
 	select {
 	case <-fn.stop:
 		return
-	case <-fn.fl.ready:
+	default:
 	}
 
 	events := fn.w.Events()
@@ -357,9 +274,7 @@ func (fs *FileSystem) handleEvents(folder string) {
 	if !ok {
 		return
 	}
-	select {
-	case <-fn.fl.ready:
-	}
+
 	events := fn.events
 	ticker := time.NewTicker(time.Second * 5)
 	for {
@@ -414,17 +329,19 @@ func (fs *FileSystem) handleEvent(e WrappedEvent, folder string) {
 
 	e.Name = name
 	switch e.Op {
-	case fsnotify.Remove:
+	case fswatcher.REMOVE:
 		setInvalid(folder, e.Name)
 		fn.eventSet.NewEvent(e)
-	case fsnotify.Write:
+	case fswatcher.WRITE:
 		setInvalid(folder, e.Name)
 		fn.eventSet.NewEvent(e)
-	case fsnotify.Create:
-		fn.fl.newItem(e.Name)
+	case fswatcher.CREATE:
+
 		fn.eventSet.NewEvent(e)
-	case fsnotify.Rename:
+	case fswatcher.MOVE:
 		setInvalid(folder, e.Name)
+		fn.eventSet.NewEvent(e)
+	case fswatcher.MOVETO:
 		fn.eventSet.NewEvent(e)
 	}
 
@@ -503,6 +420,16 @@ var (
 	errDbWrong = errors.New("db tx occur some error ")
 )
 
+/**
+todo
+ 对于文件夹的move 事件不会产生对应文件夹下子文件的
+ 移除事件.也不会产生moveTo 文件下的create事件
+ 当一个文件夹发生move 时我们应该 从 folderNode 中的
+ fileList 获取出它所有的子文件并设置 移除fileInfo
+ 完善fileList 这个field 	将会用于在内存中记录文件节点构成情况
+
+*/
+
 //移除input中的tx
 func newFileInfo(
 	fn *FolderNode,
@@ -518,15 +445,14 @@ func newFileInfo(
 	ele := l.Back()
 	name = filepath.Join(fn.fl.real, ele.Name)
 
-	if ele.Op == fsnotify.Remove ||
-		ele.Op == fsnotify.Rename {
+	if ele.Op == fswatcher.REMOVE ||
+		ele.Op == fswatcher.MOVE {
 		info, err = GernerateFileInfoInDel(fn.fl.folder,
 			ele.Name, ele.WrappedEvent)
 		if err != nil {
 			return ids, errNoNeedInfo
 		}
 	} else {
-		//todo 不要在tx 事务执行的过程中插入i/o 过长的io 可能会导致commit 失败
 		info, err = GenerateFileInfo(name)
 		if err != nil {
 			return ids, errNoNeedInfo
@@ -691,8 +617,7 @@ func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]
 func (fs *FileSystem) DiscardEvents(folder, name string) {
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
-		f.fl.lock.Lock()
-		defer f.fl.lock.Unlock()
+
 		fs.lock.RUnlock()
 		list := f.eventSet.lists[folder]
 		if list != nil {
@@ -788,8 +713,7 @@ func (fs *FileSystem) UnBlockFile(folder, name string) {
 func (fs *FileSystem) DisableCaculateUpdate(folder string) {
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
-		f.fl.lock.Lock()
-		defer f.fl.lock.Unlock()
+
 		fs.lock.RUnlock()
 		f.DisableUpdate()
 	} else {
@@ -804,12 +728,31 @@ func SetLocalId(id node.DeviceId) {
 func (fs *FileSystem) EnableCaculateUpdate(folder string) {
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
-		f.fl.lock.Lock()
-		defer f.fl.lock.Unlock()
+
 		fs.lock.RUnlock()
 		f.EnableUpdate()
 	} else {
 		fs.lock.RUnlock()
 	}
+
+}
+
+/**
+fileList 相关操作
+*/
+
+func (fs *FileSystem) onMoveFile(e WrappedEvent, folder string) {
+
+}
+
+func (fs *FileSystem) onMoveToFile(e WrappedEvent, folder string) {
+
+}
+
+func (fs *FileSystem) onCreateFile(e WrappedEvent, folder string) {
+
+}
+
+func (fs *FileSystem) onDelete(e WrappedEvent, folder string) {
 
 }

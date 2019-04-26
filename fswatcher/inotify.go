@@ -17,7 +17,7 @@ var (
 )
 
 //用于观察一个文件夹 以及文件夹下的子文件和子文件夹
-type inotifyWatcher struct {
+type FolderWatcher struct {
 	ep      *fdPoller
 	wd      int
 	root    string
@@ -39,9 +39,9 @@ const (
 )
 
 //用于观察一个 folder
-func NewWatcher(folder string) (*inotifyWatcher, error) {
+func NewWatcher(folder string) (*FolderWatcher, error) {
 	folder = filepath.Clean(folder)
-	w := new(inotifyWatcher)
+	w := new(FolderWatcher)
 
 	w.subDirs = make(map[string]string)
 
@@ -110,15 +110,15 @@ func findSubFolder(folder string) []string {
 	return folders
 }
 
-func (w *inotifyWatcher) Events() chan Event {
+func (w *FolderWatcher) Events() chan Event {
 	return w.events
 }
 
-func (w *inotifyWatcher) Errors() chan error {
+func (w *FolderWatcher) Errors() chan error {
 	return w.errors
 }
 
-func (w *inotifyWatcher) readEvents() {
+func (w *FolderWatcher) readEvents() {
 
 	var (
 		err error
@@ -201,7 +201,7 @@ func (w *inotifyWatcher) readEvents() {
 	}
 }
 
-func (w *inotifyWatcher) wrapEvent(mask uint32, name string, wd int32) {
+func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
 	if mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO ||
 		mask&unix.IN_CREATE == unix.IN_CREATE {
 		if w.handleCreate(mask, name) != nil {
@@ -256,7 +256,7 @@ func newEvent(mask uint32, name string) Event {
 }
 
 //递归得他添加文件夹的watcher
-func (w *inotifyWatcher) handleCreate(mask uint32, name string) error {
+func (w *FolderWatcher) handleCreate(mask uint32, name string) error {
 	if w.isClose() {
 		return nil
 	}
@@ -273,7 +273,7 @@ func (w *inotifyWatcher) handleCreate(mask uint32, name string) error {
 	return nil
 }
 
-func (w *inotifyWatcher) addWatcher(folder string) error {
+func (w *FolderWatcher) addWatcher(folder string) error {
 	if w.isClose() {
 		return nil
 	}
@@ -285,7 +285,7 @@ func (w *inotifyWatcher) addWatcher(folder string) error {
 	return nil
 }
 
-func (w *inotifyWatcher) Close() {
+func (w *FolderWatcher) Close() {
 	if w.isClose() {
 		return
 	}
@@ -295,7 +295,7 @@ func (w *inotifyWatcher) Close() {
 
 }
 
-func (w *inotifyWatcher) isClose() bool {
+func (w *FolderWatcher) isClose() bool {
 	select {
 	case <-w.done:
 		return true

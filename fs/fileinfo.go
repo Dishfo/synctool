@@ -19,18 +19,18 @@ import (
 
 const (
 	fileInfoTableField = `
-	 name,type,size,permissions,modifiedby,modifieds,
+	 Name,type,size,permissions,modifiedby,modifieds,
 	modifiedNs,deleted,invaild,nopermissions,
 	version,blocksize,blocks,linktarget
 	`
 
 	selectInfo = `
-	select ` + fileInfoTableField + ` from FileInfo where folder = ? and name = ? 
+	select ` + fileInfoTableField + ` from FileInfo where folder = ? and Name = ? 
 	order by id desc 
 	limit 1`
 
 	selectInfos = `
-	select ` + fileInfoTableField + ` from FileInfo where folder = ? and name = ? 
+	select ` + fileInfoTableField + ` from FileInfo where folder = ? and Name = ? 
 	order by id desc`
 
 	selectInfoById = `
@@ -40,12 +40,12 @@ const (
 	selectRecentVersion = `
   	select version 
 	 from FileInfo 
-	 where  folder = ? and name = ? 
+	 where  folder = ? and Name = ? 
 	 order by id desc  limit 1
 	`
 	updateInfo = `
-	update FileInfo set invaild = ? where folder = ? and name = ? and id in (
-		select f2.id from FileInfo f2  where f2.folder = folder and f2.name = name 	
+	update FileInfo set invaild = ? where folder = ? and Name = ? and id in (
+		select f2.id from FileInfo f2  where f2.folder = folder and f2.Name = Name 	
 		order by id desc 
 		limit 1
 	)
@@ -53,7 +53,7 @@ const (
 
 	insertFileInfo = `
 	insert into FileInfo
-	(folder,name,type,size,permissions,modifiedby,modifieds,
+	(folder,Name,type,size,permissions,modifiedby,modifieds,
 	modifiedNs,deleted,invaild,nopermissions,
 	version,blocksize,blocks,linktarget) 
 	values(?,?,?,?,?,?,?
@@ -264,11 +264,11 @@ func GernerateFileInfoInDel(folder, name string, e WrappedEvent) (*bep.FileInfo,
 
 //根据提供的文件绝对路径输出一个 fileinfo 指针
 func GenerateFileInfo(file string) (*bep.FileInfo, error) {
-	finfo, err := os.Stat(file)
+	fInfo, err := os.Stat(file)
 	if err != nil {
 		return nil, err
 	}
-	mode := finfo.Mode()
+	mode := fInfo.Mode()
 	if mode.IsDir() {
 		return generateFileInforDir(file)
 	} else if mode&os.ModeSymlink != 0 {
@@ -281,8 +281,8 @@ func GenerateFileInfo(file string) (*bep.FileInfo, error) {
 
 func generateFileInforDir(file string) (*bep.FileInfo, error) {
 	info := new(bep.FileInfo)
-	finfo, _ := os.Stat(file)
-	info.Permissions = uint32(finfo.Mode().Perm())
+	fInfo, _ := os.Stat(file)
+	info.Permissions = uint32(fInfo.Mode().Perm())
 	info.Type = bep.FileInfoType_DIRECTORY
 
 	return info, nil
@@ -304,6 +304,7 @@ func generateFileInforLink(file string) (*bep.FileInfo, error) {
 func generateFileInfo(file string) (*bep.FileInfo, error) {
 	info := new(bep.FileInfo)
 	finfo, _ := os.Stat(file)
+
 	info.Size = finfo.Size()
 	info.BlockSize = selectBlockSize(info.Size)
 	info.ModifiedS = finfo.ModTime().Unix()

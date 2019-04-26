@@ -10,32 +10,11 @@ import (
 	"sync"
 	"syncfolders/bep"
 	"syncfolders/node"
-	"syncfolders/watcher"
 	"testing"
 	"time"
 )
 
 func TestNewSet(t *testing.T) {
-	w, err := watcher.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_ = w.SetFolder("/home/dishfo/test2")
-	events := w.Events()
-	es := NewEventSet()
-	timer := time.NewTicker(time.Second * 10)
-	for {
-		select {
-		case e, _ := <-events:
-			we := WrappedEvent{
-				Event: e,
-			}
-			es.NewEvent(we)
-		case <-timer.C:
-			logAllList(es)
-		}
-	}
 }
 
 func TestMarshalBlocks(t *testing.T) {
@@ -78,8 +57,10 @@ func TestFs(t *testing.T) {
 	LocalUser, _ = node.NewUnqueId()
 	fs := new(FileSystem)
 	fs.folders = make(map[string]*FolderNode)
-	fs.AddFolder("default", "/home/dishfo/test2")
-	log.Println(fs.GetFileList("default"))
+	err := fs.AddFolder("default", "/home/dishfo/test2")
+	if err != nil {
+		log.Fatal(err)
+	}
 	index := fs.GetIndex("default")
 	data, _ := json.MarshalIndent(index, "", " ")
 	log.Println(string(data))
@@ -188,6 +169,12 @@ func wordCount2(w []string) map[string]int {
 	return words
 }
 
-func TestFileOp(t *testing.T) {
-
+func TestFileList(t *testing.T) {
+	//fn := newFolderNode("/home/dishfo/test2")
+	//err := fn.initNode()
+	//if err!=nil {
+	//	log.Fatal(err)
+	//}
+	//
+	//log.Println(fn.fl.String())
 }
