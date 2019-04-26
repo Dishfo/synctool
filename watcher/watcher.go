@@ -12,8 +12,13 @@ import (
 
 /**
 提供文件夹监视功能
- */
-
+*/
+//todo add sub watcher
+/**
+todo
+ 建立额外的fsnotify.watcher
+ 当前的fsnotify 无法确定 rename产生的新文件名
+*/
 type FolderWatcher struct {
 	folder   string
 	watcher  *fsnotify.Watcher
@@ -28,7 +33,7 @@ var (
 
 /**
 NewWatcher will retuen a ptr of FileWatcher
- */
+*/
 func NewWatcher() (*FolderWatcher, error) {
 	var (
 		err error = nil
@@ -38,8 +43,7 @@ func NewWatcher() (*FolderWatcher, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	w.evnets = make(chan fsnotify.Event,50)
+	w.evnets = make(chan fsnotify.Event, 50)
 	go func() {
 		for {
 			select {
@@ -117,7 +121,7 @@ func interalAddFolder(w *FolderWatcher, folder string) error {
 }
 
 func (w *FolderWatcher) onEvent(e fsnotify.Event) {
-//	log.Println(e)
+	//	log.Println(e)
 	switch e.Op {
 	case fsnotify.Remove:
 		w.evnets <- e

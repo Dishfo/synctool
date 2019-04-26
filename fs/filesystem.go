@@ -338,6 +338,7 @@ outter:
 			if fn.IsBlock(e.Name) {
 				continue outter
 			}
+			log.Println(e)
 			var we WrappedEvent
 			we.Event = e
 			now := time.Now()
@@ -465,6 +466,7 @@ func (fs *FileSystem) calculateUpdate(fn *FolderNode) {
 	for _, l := range lists {
 		ids, err := newFileInfo(fn, l)
 		if err == errDbWrong {
+			log.Printf("can't store fileinfo")
 			return
 		} else if err == errNoNeedInfo {
 			continue
@@ -478,7 +480,10 @@ func (fs *FileSystem) calculateUpdate(fn *FolderNode) {
 	}
 
 	if len(indexSeq.Seq) == 0 {
-		_ = tx.Commit()
+		err = tx.Commit()
+		if err != nil {
+			log.Printf("%s when calcaulate update ", err.Error())
+		}
 		return
 	}
 	_, err = StoreIndexSeq(tx, *indexSeq)
@@ -486,7 +491,10 @@ func (fs *FileSystem) calculateUpdate(fn *FolderNode) {
 		_ = tx.Rollback()
 		log.Panicf("%s when record filinfo Seq ", err.Error())
 	}
-	_ = tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("%s when calcaulate update ", err.Error())
+	}
 }
 
 var (
@@ -552,9 +560,13 @@ func newFileInfo(
 			return ids, errDbWrong
 		}
 
-		l.BackWard(ele)
 		ids = append(ids, id)
-		_ = tx.Commit()
+		err = tx.Commit()
+		if err == nil {
+			l.BackWard(ele)
+		} else {
+			return nil, errDbWrong
+		}
 		return ids, nil
 	}
 
@@ -708,6 +720,7 @@ func (fs *FileSystem) GetBlock(req *bep.Request) *bep.Response {
 	}
 
 	info, err := GetRecentInfo(tx, req.Folder, req.Name)
+	_ = tx.Commit()
 	if err != nil {
 		resp.Code = bep.ErrorCode_GENERIC
 		return resp

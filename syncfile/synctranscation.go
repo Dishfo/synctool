@@ -337,7 +337,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 
 		for _, tLink := range tFiles.Links {
 			sm.fsys.BlockFile(tLink.Folder, folderId)
-			info := sm.doSyncFolder(tLink)
+			info := sm.doSyncLink(tLink)
 			if info != nil {
 				id, err := storeFileInfo(info, tLink.Name)
 				if err != nil {
@@ -414,7 +414,6 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 		last = receiveUpdates[len(receiveUpdates)-1].Id
 	}
 
-	otx, err := fs.GetTx()
 	if err != nil {
 		log.Printf("%s when prepare get local indexUpdate ",
 			err.Error())
@@ -423,7 +422,6 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 
 	localIndex := sm.getLocalIndex(folder.Id)
 	localUpdate := sm.getLocalIndexUpdate(folder.Id)
-	_ = otx.Commit()
 
 	fromMap := make(map[string]node.DeviceId)
 	fileMap, localMap := calculateFileMap(receiveUpdates, localIndex,
@@ -717,7 +715,7 @@ func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
 	var err error
 	filePath, err := sm.GetRealPath(tFolder.Folder, tFolder.Name)
 	var needDelete = false
-	var needCreate = false
+	var needCreate = true
 	if err != nil {
 		return nil
 	}
@@ -729,6 +727,7 @@ func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
 		if info.IsDir() {
 			log.Printf("%s has exist ", filePath)
 			needDelete = true
+			needCreate = false
 		}
 
 		if hasNewerFile(info, tFolder.Dst) {
@@ -736,10 +735,8 @@ func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
 		}
 
 		if IsLink(info) {
-			needCreate = true
 			bak, err = deleteLink(filePath, true)
 		} else {
-			needCreate = true
 			bak, err = deleteFile(filePath, true)
 		}
 	}
@@ -834,7 +831,7 @@ func (sm *SyncManager) doSyncLink(tLink *TargetFile) *bep.FileInfo {
 	filePath, err := sm.GetRealPath(tLink.Folder, tLink.Name)
 	target := tLink.Dst.SymlinkTarget
 	info, err := os.Stat(filePath)
-	if os.IsExist(err) {
+	if !os.IsNotExist(err) {
 		if hasNewerFile(info, tLink.Dst) {
 			return nil
 		}

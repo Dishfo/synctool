@@ -106,7 +106,6 @@ func (sm *SyncManager) handleClusterConfig(remote node.DeviceId,
 			continue
 		}
 		if !containDevice(remote, share.Devices) {
-			sm.folderLock.RUnlock()
 			continue
 		}
 		if !HasRelation(tx, share.Id, remote) {
