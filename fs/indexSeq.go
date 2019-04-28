@@ -31,7 +31,7 @@ type IndexSeq struct {
 db funtions with tx
 */
 
-func StoreIndexSeq(tx *sql.Tx, seq IndexSeq) (int64, error) {
+func storeIndexSeq(tx *sql.Tx, seq IndexSeq) (int64, error) {
 	seqs := []string{}
 	for _, n := range seq.Seq {
 		seqs = append(seqs, strconv.FormatInt(n, 10))
@@ -47,16 +47,16 @@ func StoreIndexSeq(tx *sql.Tx, seq IndexSeq) (int64, error) {
 	}
 }
 
-func GetIndexSeqAfter(tx *sql.Tx, id int64, folder string) ([]*IndexSeq, error) {
+func getIndexSeqAfter(tx *sql.Tx, id int64, folder string) ([]*IndexSeq, error) {
 	rows, err := tx.Query(selectUpdate, id, folder)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	indexSeqs := make([]*IndexSeq,0)
+	indexSeqs := make([]*IndexSeq, 0)
 	for rows.Next() {
 		indexSeq := new(IndexSeq)
-		fillIndexSeq(rows,indexSeq)
+		fillIndexSeq(rows, indexSeq)
 		indexSeqs = append(indexSeqs, indexSeq)
 	}
 
@@ -76,7 +76,7 @@ func fillIndexSeq(rows *sql.Rows, indexSeq *IndexSeq) {
 
 }
 
-func GetIndexSeq(tx *sql.Tx, id int64) (*IndexSeq, error) {
+func getIndexSeq(tx *sql.Tx, id int64) (*IndexSeq, error) {
 	rows, err := tx.Query(selectInfoSeqById, id)
 	if err != nil {
 		_ = tx.Rollback()

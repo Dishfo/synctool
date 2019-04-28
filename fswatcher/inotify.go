@@ -229,6 +229,7 @@ func newEvent(mask uint32, name string) Event {
 	var e = Event{
 		Name: name,
 	}
+
 	if mask&unix.IN_CREATE == unix.IN_CREATE {
 		e.Op |= CREATE
 	}
@@ -243,7 +244,7 @@ func newEvent(mask uint32, name string) Event {
 	}
 
 	if mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO {
-
+		e.Op |= MOVETO
 	}
 
 	if mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF ||

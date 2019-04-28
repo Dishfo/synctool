@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -61,9 +60,39 @@ func TestFs(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	index := fs.GetIndex("default")
-	data, _ := json.MarshalIndent(index, "", " ")
-	log.Println(string(data))
+
+	go func() {
+		ticker := time.NewTicker(time.Second * 8)
+		var lastUpdate int64 = 1
+		for {
+
+			select {
+			case <-ticker.C:
+				indexSeqs := fs.GetIndexSeqAfter("default", lastUpdate)
+				updates := fs.GetUpdateAfter("default", lastUpdate)
+				for _, indexSeq := range indexSeqs {
+					lastUpdate = indexSeq.Id
+				}
+
+				log.Println("---- ")
+				for _, u := range updates {
+					for _, f := range u.Files {
+						if f.Deleted {
+							log.Printf("======%s is deleted ", f.Name)
+						} else {
+							log.Printf("======%s is edited ", f.Name)
+						}
+					}
+				}
+
+			}
+		}
+	}()
+	//fs.RemoveFolder("default")
+	//
+	//index = fs.GetIndex("default")
+	//data, _ = json.MarshalIndent(index, "", " ")
+	//log.Println(string(data),"end")
 	select {}
 }
 
@@ -82,13 +111,13 @@ func TestFileInfo(t *testing.T) {
 		log.Println(info)
 	}
 
-	id, _ := StoreFileinfo(nil, "default", info)
-	info, _ = GetInfoById(nil, id)
+	id, _ := storeFileInfo(nil, "default", info)
+	info, _ = getInfoById(nil, id)
 	log.Println(info)
 }
 
 func TestFileSystem_GetFileList(t *testing.T) {
-	log.Println(getRealFileList("/home/dishfo/test2"))
+	//log.Println(getRealFileList("/home/dishfo/test2"))
 }
 
 func runTime() func() {

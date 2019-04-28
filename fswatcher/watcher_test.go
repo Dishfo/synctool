@@ -4,7 +4,6 @@ import (
 	"golang.org/x/sys/unix"
 	"log"
 	"testing"
-	"time"
 )
 
 const (
@@ -31,13 +30,13 @@ func TestWatcher(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go func() {
-		timer := time.NewTimer(time.Second * 5)
-		select {
-		case <-timer.C:
-			w.Close()
-		}
-	}()
+	//go func() {
+	//	timer := time.NewTimer(time.Second * 5)
+	//	select {
+	//	case <-timer.C:
+	//		w.Close()
+	//	}
+	//}()
 	for {
 		select {
 		case err, ok := <-w.errors:

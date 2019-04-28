@@ -62,7 +62,7 @@ const (
 	`
 )
 
-func GetRecentInfo(tx *sql.Tx, folder, name string) (*bep.FileInfo, error) {
+func getRecentInfo(tx *sql.Tx, folder, name string) (*bep.FileInfo, error) {
 	res, err := tx.Query(selectInfo, folder, name)
 	if err != nil {
 		log.Printf("%s when select recent fileinfo ", err.Error())
@@ -78,7 +78,7 @@ func GetRecentInfo(tx *sql.Tx, folder, name string) (*bep.FileInfo, error) {
 	}
 }
 
-func GetRecentVersion(tx *sql.Tx, folder, name string) (*bep.Vector, error) {
+func getRecentVersion(tx *sql.Tx, folder, name string) (*bep.Vector, error) {
 	rows, err := tx.Query(selectRecentVersion, folder, name)
 	if err != nil {
 		log.Printf("%s when get recent version of %s %s",
@@ -100,7 +100,7 @@ func GetRecentVersion(tx *sql.Tx, folder, name string) (*bep.Vector, error) {
 }
 
 //获取指定 id的 fileinfo
-func GetInfoById(tx *sql.Tx, id int64) (*bep.FileInfo, error) {
+func getInfoById(tx *sql.Tx, id int64) (*bep.FileInfo, error) {
 
 	res, err := tx.Query(selectInfoById, id)
 	if err != nil {
@@ -118,7 +118,7 @@ func GetInfoById(tx *sql.Tx, id int64) (*bep.FileInfo, error) {
 }
 
 //将一个文件设置为 invaild 处于无法提供数据的状态
-func SetInvaild(tx *sql.Tx, folder, name string) (int64, error) {
+func setInvalid(tx *sql.Tx, folder, name string) (int64, error) {
 	res, err := tx.Exec(updateInfo, 1, folder, name)
 	if err != nil {
 		log.Printf("%s when set invaild flag for %s %s ",
@@ -131,7 +131,7 @@ func SetInvaild(tx *sql.Tx, folder, name string) (int64, error) {
 }
 
 //存储一个 fileinfo 并返回 id
-func StoreFileinfo(tx *sql.Tx, folder string, info *bep.FileInfo) (int64, error) {
+func storeFileInfo(tx *sql.Tx, folder string, info *bep.FileInfo) (int64, error) {
 	p, err := marshalBlcoks(info.Blocks)
 	version, err := proto.Marshal(info.Version)
 	if err != nil {
@@ -168,7 +168,7 @@ func StoreFileinfo(tx *sql.Tx, folder string, info *bep.FileInfo) (int64, error)
 func GetFileInfos(tx *sql.Tx, ids []int64) ([]*bep.FileInfo, error) {
 	fileInfos := make([]*bep.FileInfo, 0)
 	for _, id := range ids {
-		fileinfo, err := GetInfoById(tx, id)
+		fileinfo, err := getInfoById(tx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +177,7 @@ func GetFileInfos(tx *sql.Tx, ids []int64) ([]*bep.FileInfo, error) {
 	return fileInfos, nil
 }
 
-func GetIndex(tx *sql.Tx, indexSeq *IndexSeq) (*bep.Index, error) {
+func getIndex(tx *sql.Tx, indexSeq *IndexSeq) (*bep.Index, error) {
 	index := new(bep.Index)
 	infos, err := GetFileInfos(tx, indexSeq.Seq)
 	if err != nil {
@@ -190,7 +190,7 @@ func GetIndex(tx *sql.Tx, indexSeq *IndexSeq) (*bep.Index, error) {
 	return index, nil
 }
 
-func GetIndexUpdate(tx *sql.Tx, updateSeq *IndexSeq) (*bep.IndexUpdate, error) {
+func getIndexUpdate(tx *sql.Tx, updateSeq *IndexSeq) (*bep.IndexUpdate, error) {
 	update := new(bep.IndexUpdate)
 	infos, err := GetFileInfos(tx, updateSeq.Seq)
 	if err != nil {
@@ -238,36 +238,13 @@ func fillFileInfo(rows *sql.Rows, info *bep.FileInfo) {
 	info.Blocks = unmarshalBlcoks(b)
 }
 
-func GernerateFileInfoInDel(folder, name string, e WrappedEvent) (*bep.FileInfo, error) {
-	tx, err := GetTx()
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, errDbWrong
-	}
-	info, err := GetRecentInfo(tx, folder, name)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, errDbWrong
-	}
-	if info == nil {
-		_ = tx.Rollback()
-		return nil, errNoNeedInfo
-	}
-	_ = tx.Commit()
-	info.Deleted = true
-	info.Size = 0
-	info.ModifiedS = e.Mods
-	info.ModifiedNs = int32(e.ModNs - STons*e.Mods)
-
-	return info, nil
-}
-
 //根据提供的文件绝对路径输出一个 fileinfo 指针
 func GenerateFileInfo(file string) (*bep.FileInfo, error) {
 	fInfo, err := os.Stat(file)
 	if err != nil {
 		return nil, err
 	}
+
 	mode := fInfo.Mode()
 	if mode.IsDir() {
 		return generateFileInforDir(file)

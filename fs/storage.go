@@ -2,19 +2,12 @@ package fs
 
 import (
 	"bytes"
-	"crypto/md5"
 	"database/sql"
-	"encoding/base32"
 	"encoding/binary"
 	"github.com/gogo/protobuf/proto"
 	_ "github.com/mattn/go-sqlite3"
-	"io/ioutil"
 	"log"
-	"os"
-	"path/filepath"
-	"strconv"
 	"syncfolders/bep"
-	"time"
 )
 
 /**
@@ -74,57 +67,44 @@ const (
 	`
 )
 
-var (
-	db *sql.DB
-)
+type dbWrapper struct {
+	db     *sql.DB
+	dbFile string
+}
 
-func init() {
-	if db != nil {
-		return
-	}
-
-	removeOldDatabase()
-	var dbname = randomDbName()
+func newDb(dbFile string) (*dbWrapper, error) {
+	dw := new(dbWrapper)
 	var err error
-	db, err = sql.Open("sqlite3", dbname)
+	db, err := sql.Open("sqlite3", dbFile)
+
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	_, err = db.Exec(createFileInfoTable)
 	if err != nil {
-		log.Fatal(err, " when create fileInfo table")
+		return nil, err
 	}
 
 	_, err = db.Exec(createSeqTable)
 	if err != nil {
-		log.Fatal(err, " when create fileInfo table")
+		return nil, err
 	}
 	log.Println("init sqlite DataBase ")
+	dw.db = db
+	dw.dbFile = dbFile
 
+	return dw, nil
 }
 
-func dbClose() {
-	_ = db.Close()
-}
-
-func removeOldDatabase() {
-	var dir, _ = os.Getwd()
-	var files, _ = ioutil.ReadDir(dir)
-	for _, file := range files {
-		if filepath.Ext(file.Name()) == DbFileSuff {
-			_ = os.Remove(filepath.Join(dir, file.Name()))
-		}
+func (dw *dbWrapper) Close() error {
+	if dw.db == nil {
+		return nil
 	}
-}
-
-func randomDbName() string {
-	var prefix = strconv.FormatInt(time.Now().Unix(), 10)
-	var suffix = strconv.FormatInt(time.Now().UnixNano(), 10)
-	var name = prefix + suffix
-	var hash = md5.Sum([]byte(name))
-	name = base32.StdEncoding.EncodeToString(hash[:])
-	return name + DbFileSuff
+	defer func() {
+		dw.db = nil
+	}()
+	return dw.db.Close()
 }
 
 func unmarshalBlcoks(p []byte) []*bep.BlockInfo {
@@ -160,7 +140,6 @@ func marshalBlcoks(blocks []*bep.BlockInfo) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func GetTx() (*sql.Tx, error) {
-
-	return db.Begin()
+func (dw *dbWrapper) GetTx() (*sql.Tx, error) {
+	return dw.db.Begin()
 }

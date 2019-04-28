@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"container/list"
 	"encoding/json"
 	"path/filepath"
 )
@@ -131,6 +132,47 @@ func (fl *fileList) removeItem(name string) {
 	} else {
 		return
 	}
+}
+
+func (fl *fileList) getSubFiles(name string) []string {
+	files := make([]string, 0)
+	l := list.New()
+	index, ok := fl.indexs[name]
+	if !ok {
+		return files
+	}
+	if item, ok := fl.items[index]; ok {
+		if item.fileType == typeFolder {
+			l.PushBack(item)
+		}
+	}
+
+	e := l.Front()
+	for ; e != nil; e = e.Next() {
+		ele := e.Value.(Elem)
+		index := fl.indexs[ele.name]
+		folder := fl.folders[index]
+		for _, i := range folder.items {
+			item, ok := fl.items[i]
+			if !ok {
+				continue
+			}
+			files = append(files, item.name)
+			if item.fileType == typeFolder {
+				l.PushBack(item)
+			}
+		}
+	}
+
+	return files
+}
+
+func (fl *fileList) findFile(name string) *Elem {
+	if i, ok := fl.indexs[name]; ok {
+		elem := fl.items[i]
+		return &elem
+	}
+	return nil
 }
 
 //用于输出filelist 时使用
