@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syncfolders/bep"
 	"syncfolders/node"
 	"testing"
 	"time"
@@ -17,24 +16,7 @@ func TestNewSet(t *testing.T) {
 }
 
 func TestMarshalBlocks(t *testing.T) {
-	blocks := []*bep.BlockInfo{
-		{
-			Size: 15,
-		},
-		{
-			Size: 177,
-		},
-	}
 
-	p, err := marshalBlcoks(blocks)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	blocks = unmarshalBlcoks(p)
-	for _, b := range blocks {
-		log.Println(*b)
-	}
 }
 
 //unthread-safe
@@ -62,7 +44,7 @@ func TestFs(t *testing.T) {
 	}
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 8)
+		ticker := time.NewTicker(time.Second * 4)
 		var lastUpdate int64 = 1
 		for {
 
@@ -74,7 +56,6 @@ func TestFs(t *testing.T) {
 					lastUpdate = indexSeq.Id
 				}
 
-				log.Println("---- ")
 				for _, u := range updates {
 					for _, f := range u.Files {
 						if f.Deleted {
@@ -88,37 +69,15 @@ func TestFs(t *testing.T) {
 			}
 		}
 	}()
-	//fs.RemoveFolder("default")
-	//
-	//index = fs.GetIndex("default")
-	//data, _ = json.MarshalIndent(index, "", " ")
-	//log.Println(string(data),"end")
+
 	select {}
 }
 
 func TestFileInfo(t *testing.T) {
-	info, err := GenerateFileInfo("/home/dishfo/test2/hello")
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		info.Version = &bep.Vector{
-			Counters: []*bep.Counter{
-				{Id: 12345,
-					Value: 13},
-			},
-		}
-		info.Name = "testaa"
-		log.Println(info)
-	}
 
-	id, _ := storeFileInfo(nil, "default", info)
-	info, _ = getInfoById(nil, id)
-	log.Println(info)
 }
 
-func TestFileSystem_GetFileList(t *testing.T) {
-	//log.Println(getRealFileList("/home/dishfo/test2"))
-}
+func TestFileSystem_GetFileList(t *testing.T) {}
 
 func runTime() func() {
 	now := time.Now()

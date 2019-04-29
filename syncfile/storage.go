@@ -2,14 +2,14 @@ package syncfile
 
 import (
 	"database/sql"
-	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syncfolders/bep"
-	"syncfolders/fs"
 	"syncfolders/node"
 )
 
@@ -20,9 +20,12 @@ in-memory sql
 /**
 todo 事务处理中应该有更加细致的隔离等级划分
 */
-var (
-	db *sql.DB
-)
+
+/**
+todo 再开启一个额外的存储数据库
+ 对于接收到的fileinfo都会单独存储在这里
+ fsys 中仅存储本地的fileInfo
+*/
 
 const (
 	typeIndex  = 1
@@ -62,12 +65,22 @@ const (
 )
 
 func init() {
-	var err error
-	_ = os.Remove(dbFile)
-	db, err = sql.Open("sqlite3", dbFile)
+
+	dir, _ := os.Getwd()
+	infos, _ := ioutil.ReadDir(dir)
+	for _, info := range infos {
+		if filepath.Ext(info.Name()) == ".db" ||
+			filepath.Ext(info.Name()) == ".db-journal" {
+			filePath := filepath.Join(dir, info.Name())
+			_ = os.Remove(filePath)
+		}
+	}
+}
+
+func initDB(name string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", name)
 	if err != nil {
-		log.Fatalf("%s when init in-memory databases ",
-			err.Error())
+		return nil, err
 	}
 
 	_, err = db.Exec(createRelationTable)
@@ -87,6 +100,14 @@ func init() {
 		log.Fatalf("%s when create sendUpdate table",
 			err.Error())
 	}
+
+	_, err = bep.CreateFileInfoTable(db)
+	if err != nil {
+		log.Fatalf("%s when create FileInfo  table",
+			err.Error())
+	}
+
+	return db, nil
 }
 
 const (
@@ -152,11 +173,11 @@ const (
 提供receiveUpdate 访问函数
 */
 
-func StoreReceiveUpadte(tx *sql.Tx, update *ReceiveIndexUpdate) (int64, error) {
+func storeReceiveUpadte(tx *sql.Tx, update *ReceiveIndexUpdate) (int64, error) {
 	return storeReceivedData(tx, update)
 }
 
-func StoreReceiveIndex(tx *sql.Tx, index *ReceiveIndex) (int64, error) {
+func storeReceiveIndex(tx *sql.Tx, index *ReceiveIndex) (int64, error) {
 	return storeReceivedData(tx, index)
 }
 
@@ -185,20 +206,15 @@ func storeReceivedData(tx *sql.Tx, data interface{}) (int64, error) {
 		timestamp = receupdate.timestamp
 	}
 
-	otx, err := fs.GetTx()
-	if err != nil {
-		return 0, fmt.Errorf("%s when insert fileinfo ", err.Error())
-	}
-
 	for _, info := range infos {
-		id, err := fs.StoreFileinfo(otx, folder, info)
+		id, err := bep.StoreFileInfo(tx, folder, info)
 		if err != nil {
-			_ = otx.Rollback()
+			_ = tx.Rollback()
 			return 0, err
 		}
 		seqs = append(seqs, id)
 	}
-	_ = otx.Commit()
+	_ = tx.Commit()
 
 	seqsstr := ArrayToString(seqs)
 	stmt, err := tx.Prepare(insertReceiveIndex)
@@ -214,8 +230,8 @@ func storeReceivedData(tx *sql.Tx, data interface{}) (int64, error) {
 	return id, nil
 }
 
-func GetReceiveIndex(tx *sql.Tx, id int64) ([]*ReceiveIndex, error) {
-	receiveUpdates, err := GetReceiveUpdate(tx, id)
+func getReceiveIndex(tx *sql.Tx, id int64) ([]*ReceiveIndex, error) {
+	receiveUpdates, err := getReceiveUpdate(tx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +251,7 @@ func GetReceiveIndex(tx *sql.Tx, id int64) ([]*ReceiveIndex, error) {
 	return receiveIndexs, nil
 }
 
-func GetReceiveUpdate(tx *sql.Tx, id int64) ([]*ReceiveIndexUpdate, error) {
+func getReceiveUpdate(tx *sql.Tx, id int64) ([]*ReceiveIndexUpdate, error) {
 	stmt, err := tx.Prepare(selectReceiveUpdate)
 	if err != nil {
 		return nil, err
@@ -261,15 +277,15 @@ func GetReceiveUpdate(tx *sql.Tx, id int64) ([]*ReceiveIndexUpdate, error) {
 		if err != nil {
 			return nil, err
 		}
-		otx, err := fs.GetTx()
+
 		if err != nil {
 			return nil, err
 		}
 
 		ids := StringToArray(seqs)
-		infos, err := fs.GetFileInfos(otx, ids)
+		infos, err := bep.GetFileInfos(tx, ids)
 		if err != nil {
-			_ = otx.Rollback()
+			_ = tx.Rollback()
 			return nil, err
 		}
 
@@ -280,13 +296,13 @@ func GetReceiveUpdate(tx *sql.Tx, id int64) ([]*ReceiveIndexUpdate, error) {
 		update.update.Files = infos
 
 		updates = append(updates, update)
-		_ = otx.Commit()
+		_ = tx.Commit()
 	}
 
 	return updates, nil
 }
 
-func GetReceiveUpdateAfter(tx *sql.Tx, id int64, folderId string) ([]*ReceiveIndexUpdate, error) {
+func getReceiveUpdateAfter(tx *sql.Tx, id int64, folderId string) ([]*ReceiveIndexUpdate, error) {
 	stmt, err := tx.Prepare(selectReceiveUpdateAfter)
 	if err != nil {
 		return nil, err
@@ -312,19 +328,19 @@ func GetReceiveUpdateAfter(tx *sql.Tx, id int64, folderId string) ([]*ReceiveInd
 		if err != nil {
 			return nil, err
 		}
-		otx, err := fs.GetTx()
+
 		if err != nil {
 			return nil, err
 		}
 
 		ids := StringToArray(seqs)
-		infos, err := fs.GetFileInfos(otx, ids)
+		infos, err := bep.GetFileInfos(tx, ids)
 		if err != nil {
-			_ = otx.Rollback()
+			_ = tx.Rollback()
 			return nil, err
 		}
 
-		_ = otx.Commit()
+		_ = tx.Commit()
 		update.timestamp = timestamp
 		update.remote = node.DeviceId(remote)
 		update.update = new(bep.IndexUpdate)
@@ -393,7 +409,7 @@ type SendUpdate struct {
 	Remote   node.DeviceId
 }
 
-func StoreSendUpdate(tx *sql.Tx, su *SendUpdate) (int64, error) {
+func storeSendUpdate(tx *sql.Tx, su *SendUpdate) (int64, error) {
 	stmt, err := tx.Prepare(insertSendUpdate)
 	if err != nil {
 		return 0, err
@@ -410,7 +426,7 @@ func StoreSendUpdate(tx *sql.Tx, su *SendUpdate) (int64, error) {
 	return id, nil
 }
 
-func GetSendUpdateOfDevice(tx *sql.Tx, remote node.DeviceId) ([]*SendUpdate, error) {
+func getSendUpdateOfDevice(tx *sql.Tx, remote node.DeviceId) ([]*SendUpdate, error) {
 	stmt, err := tx.Prepare(selectSendUpdateByDevice)
 	if err != nil {
 		return nil, err
@@ -433,7 +449,7 @@ func GetSendUpdateOfDevice(tx *sql.Tx, remote node.DeviceId) ([]*SendUpdate, err
 	return sus, nil
 }
 
-func GetSendUpdateToFolder(tx *sql.Tx,
+func getSendUpdateToFolder(tx *sql.Tx,
 	remote node.DeviceId, folder string) ([]*SendUpdate, error) {
 	stmt, err := tx.Prepare(selectSendUpdateByDevAndFolder)
 	if err != nil {

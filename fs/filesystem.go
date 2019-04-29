@@ -5,6 +5,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -228,6 +229,7 @@ outter:
 			if fn.IsBlock(e.Name) {
 				continue outter
 			}
+			log.Println(e)
 			var we WrappedEvent
 			we.Event = e
 			now := time.Now()
@@ -294,6 +296,11 @@ func (fs *FileSystem) GetIndexUpdateMap(folderId string, indexSeqs []*IndexSeq) 
 	map[int64]*bep.IndexUpdate) {
 
 	return nil, nil
+}
+
+//sync 逻辑中会干预记录操作
+func (fs *FileSystem) SetFileInfo(folder string, info *bep.FileInfo) (int64, error) {
+	return -1, nil
 }
 
 func (fs *FileSystem) getFolderIndexId(folderId string) int64 {

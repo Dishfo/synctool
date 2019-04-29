@@ -1,7 +1,12 @@
 package syncfile
 
 import (
+	"crypto/md5"
+	"database/sql"
+	"encoding/base32"
 	"github.com/libp2p/go-libp2p-peer"
+	"log"
+	"strconv"
 	"sync"
 	"syncfolders/bep"
 	"syncfolders/fs"
@@ -59,6 +64,7 @@ type SyncManager struct {
 
 	hostIds map[node.DeviceId]peer.ID
 	devices map[node.DeviceId]*bep.Device
+	cacheDb *sql.DB
 
 	rwm *requestWaitingManager
 
@@ -98,7 +104,21 @@ func NewSyncManager(fsys *fs.FileSystem,
 	sm.rwm = newReqWaitManager(sm)
 	sm.setupTimerTask()
 
+	db, err := initDB(randomDbName())
+	if err != nil {
+		log.Fatalf("%s when init database ", err.Error())
+	}
+	sm.cacheDb = db
 	return sm
+}
+
+func randomDbName() string {
+	var prefix = strconv.FormatInt(time.Now().Unix(), 10)
+	var suffix = strconv.FormatInt(time.Now().UnixNano(), 10)
+	var name = prefix + suffix
+	var hash = md5.Sum([]byte(name))
+	name = base32.StdEncoding.EncodeToString(hash[:])
+	return name + ".db"
 }
 
 func (sm *SyncManager) ProvideNotification(remote node.DeviceId) *node.ConnectionNotification {

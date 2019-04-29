@@ -225,21 +225,6 @@ func (sm *SyncManager) prepareSync() {
 	}
 }
 
-func storeFileInfo(info *bep.FileInfo, folder string) (int64, error) {
-	tx, err := fs.GetTx()
-	if err != nil {
-		return -1, err
-	}
-	log.Println("will store a fileinfo ", info)
-	id, err := fs.StoreFileinfo(tx, folder, info)
-	if err != nil {
-		_ = tx.Rollback()
-		return 0, err
-	}
-	_ = tx.Commit()
-	return id, nil
-}
-
 //todo
 //todo
 //todo (3个todo做标记 ^ __ ^)
@@ -253,10 +238,10 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.folderLock.Unlock()
 			return
 		}
-		sm.fsys.DisableCaculateUpdate(folderId)
+		sm.fsys.DisableCalculateUpdate(folderId)
 		sm.folderLock.Unlock()
 
-		defer sm.fsys.EnableCaculateUpdate(folderId)
+		defer sm.fsys.EnableCalculateUpdate(folderId)
 		defer endSyncTranscation(folder)
 		tFiles, last := sm.calculateNewestFolder(folder)
 
@@ -311,7 +296,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.fsys.BlockFile(tFolder.Folder, tFolder.Name)
 			info := sm.doSyncFolder(tFolder)
 			if info != nil {
-				id, err := storeFileInfo(info, folderId)
+				id, err := sm.fsys.SetFileInfo(folderId, info)
 				if err != nil {
 					infos = append(infos, id)
 				}
@@ -324,7 +309,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.fsys.BlockFile(tFile.Folder, tFile.Name)
 			info := sm.doSyncFile(tFile, blockSet)
 			if info != nil {
-				id, err := storeFileInfo(info, folderId)
+				id, err := sm.fsys.SetFileInfo(folderId, info)
 				if err == nil {
 					infos = append(infos, id)
 				} else {
@@ -339,7 +324,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.fsys.BlockFile(tLink.Folder, folderId)
 			info := sm.doSyncLink(tLink)
 			if info != nil {
-				id, err := storeFileInfo(info, tLink.Name)
+				id, err := sm.fsys.SetFileInfo(tLink.Folder, info)
 				if err != nil {
 					infos = append(infos, id)
 				}
@@ -359,25 +344,10 @@ func (sm *SyncManager) syncFolder(folderId string) {
 	}
 }
 
+//TODO　修改这个函数
 func storeFileInfos(infoIds []int64, folder string) error {
-	tx, err := fs.GetTx()
-	if err != nil {
-		return err
-	}
 
-	if len(infoIds) != 0 {
-		_, err = fs.StoreIndexSeq(tx, fs.IndexSeq{
-			Folder: folder,
-			Seq:    infoIds,
-		})
-	}
-
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	return tx.Commit()
+	return nil
 }
 
 func (sm *SyncManager) LocalId() node.DeviceId {
@@ -393,14 +363,14 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 	tf.Folders = make([]*TargetFile, 0)
 	tf.Links = make([]*TargetFile, 0)
 	var last int64 = 0
-	tx, err := db.Begin()
+	tx, err := sm.cacheDb.Begin()
 	if err != nil {
 		log.Printf("%s when prepare calculate update of %s ",
 			err.Error(), folder.Id)
 		return nil, -1
 	}
 
-	receiveUpdates, err := GetReceiveUpdateAfter(tx, folder.lastUpdate, folder.Id)
+	receiveUpdates, err := getReceiveUpdateAfter(tx, folder.lastUpdate, folder.Id)
 	_ = tx.Commit()
 	if err != nil {
 		log.Printf("%s when prepare get received update of %s ",

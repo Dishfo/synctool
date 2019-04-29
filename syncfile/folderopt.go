@@ -218,7 +218,7 @@ func (sm *SyncManager) onAddFolder(folder *ShareFolder) {
 					continue
 				}
 				r.Remote = devId
-				tx, err := db.Begin()
+				tx, err := sm.cacheDb.Begin()
 				if err != nil {
 					panic(err)
 				}
@@ -289,14 +289,8 @@ func (sm *SyncManager) prepareSendUpdate() {
 	defer sm.EndSendUpdate()
 
 	devIds := sm.getConnectedDevice()
-	otx, err = fs.GetTx()
-	if err != nil {
-		log.Printf("%s when preparet to send updates ",
-			err.Error())
-		return
-	}
 
-	tx, err = db.Begin()
+	tx, err = sm.cacheDb.Begin()
 	if err != nil {
 		log.Printf("%s when preparet to send updates ",
 			err.Error())
@@ -317,7 +311,7 @@ func (sm *SyncManager) prepareSendUpdate() {
 			if relation.PeerReadOnly {
 				continue
 			}
-			sus, err := GetSendUpdateToFolder(tx, dev, relation.Folder)
+			sus, err := getSendUpdateToFolder(tx, dev, relation.Folder)
 			if err != nil {
 				log.Printf(" %s when get SendUpdates of %s ",
 					err.Error(), dev.String())
@@ -327,7 +321,7 @@ func (sm *SyncManager) prepareSendUpdate() {
 			for _, su := range sus {
 				tagMap[su.UpdateId] = true
 			}
-			indexSeqs, err := fs.GetIndexSeqAfter(otx, 0, relation.Folder)
+			indexSeqs := sm.fsys.GetIndexSeqAfter(relation.Folder, 0)
 
 			if err != nil {
 				log.Printf(" %s whecd n get indexSeqs of %s ",
@@ -342,7 +336,8 @@ func (sm *SyncManager) prepareSendUpdate() {
 				}
 			}
 
-			indexs, updates := sm.getUpdatesByIndexSeq(readySend)
+			indexs, updates :=
+				sm.getUpdatesByIndexSeq(relation.Folder, readySend)
 			for id, index := range indexs {
 				log.Println(index)
 				sm.sendUpdate(dev,
@@ -374,7 +369,7 @@ func (sm *SyncManager) sendUpdate(remote node.DeviceId,
 			UpdateId: uid,
 			Remote:   remote,
 		}
-		id, err := StoreSendUpdate(tx, su)
+		id, err := storeSendUpdate(tx, su)
 		log.Println(id)
 		if err != nil {
 			log.Println(err.Error())
@@ -387,7 +382,7 @@ func (sm *SyncManager) sendUpdate(remote node.DeviceId,
 }
 
 //严格区分index indexUpdate
-func (sm *SyncManager) getUpdatesByIndexSeq(indexSeqs []*fs.IndexSeq) (map[int64]*bep.Index,
+func (sm *SyncManager) getUpdatesByIndexSeq(folderId string, indexSeqs []*fs.IndexSeq) (map[int64]*bep.Index,
 	map[int64]*bep.IndexUpdate) {
-	return sm.fsys.GetIndexUpdates(indexSeqs)
+	return sm.fsys.GetIndexUpdateMap(folderId, indexSeqs)
 }

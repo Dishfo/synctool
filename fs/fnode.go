@@ -225,6 +225,7 @@ func (fn *FolderNode) isClose() bool {
 }
 
 func (fn *FolderNode) cacheEvent(e WrappedEvent) {
+
 	select {
 	case fn.events <- e:
 
@@ -329,6 +330,8 @@ func newFileInfo(
 	l *EventList) ([]int64, error) {
 
 	var hasMove bool
+	var hasMoveTo bool
+
 	baseState := fileState{}
 	infoIds := make([]int64, 0)
 	event := l.Front()
@@ -345,11 +348,17 @@ func newFileInfo(
 
 	for ; event != nil; event = l.Next(event) {
 		olde = event
-		if event.Op == fswatcher.MOVE &&
-			baseState.target == oldFile &&
-			filele.fileType == typeFolder {
+		if filele != nil &&
+			filele.fileType == typeFolder &&
+			event.Op == fswatcher.MOVE &&
+			baseState.target == oldFile {
 			hasMove = true
 		}
+
+		if event.Op == fswatcher.MOVETO {
+			hasMoveTo = true
+		}
+
 		processEvent(event.WrappedEvent, &baseState)
 	}
 
@@ -366,6 +375,28 @@ func newFileInfo(
 		id, err := fn.internalStoreFileInfo(info)
 		if err != nil {
 			return infoIds, err
+		}
+
+		if hasMoveTo {
+			infos := generateInfos(l.Name)
+			if len(infos) != 0 {
+				for _, info := range infos {
+					info.Version = &bep.Vector{
+						Counters: []*bep.Counter{
+							fn.nextCounter(),
+						},
+					}
+					id, err := fn.internalStoreFileInfo(info)
+					if err != nil {
+						return infoIds, err
+					}
+					infoIds = append(infoIds, id)
+				}
+			}
+
+			for _, info := range infos {
+				fn.onFileCreate(info)
+			}
 		}
 
 		infoIds = append(infoIds, id)
@@ -445,6 +476,29 @@ func initState(we WrappedEvent, state *fileState) {
 	}
 }
 
+func generateInfos(dir string) []*bep.FileInfo {
+	infos := make([]*bep.FileInfo, 0)
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return infos
+	}
+	for _, f := range files {
+		filePath := filepath.Join(dir, f.Name())
+		info, err := GenerateFileInfo(filePath)
+		info.Name = f.Name()
+		info.ModifiedBy = uint64(LocalUser)
+		if err != nil {
+			continue
+		}
+		infos = append(infos, info)
+		if f.IsDir() {
+			infos = append(infos, generateInfos(filePath)...)
+		}
+	}
+
+	return infos
+}
+
 func processEvent(we WrappedEvent, state *fileState) {
 	switch we.Op {
 	case fswatcher.WRITE:
@@ -481,7 +535,7 @@ func (fn *FolderNode) generateDelFileInfo(folder, name string,
 		return nil, err
 	}
 
-	recentInfo, err := getRecentInfo(tx, folder, name)
+	recentInfo, err := bep.GetRecentInfo(tx, folder, name)
 	if err != nil {
 		return nil, err
 	}
@@ -503,7 +557,7 @@ func (fn *FolderNode) appeandFileInfo(info *bep.FileInfo) error {
 		return err
 	}
 
-	recentInfo, err := getRecentInfo(tx, fn.folderId, info.Name)
+	recentInfo, err := bep.GetRecentInfo(tx, fn.folderId, info.Name)
 	if err != nil {
 		return err
 	}
@@ -586,7 +640,7 @@ func (fn *FolderNode) getUpdatesAfter(id int64) []*bep.IndexUpdate {
 		update.Folder = fn.folderId
 		update.Files = make([]*bep.FileInfo, 0)
 		for _, s := range seq.Seq {
-			info, err := getInfoById(tx, s)
+			info, err := bep.GetInfoById(tx, s)
 			if err != nil {
 				_ = tx.Rollback()
 				return updates
@@ -700,7 +754,7 @@ func (fn *FolderNode) internalSetInvalid(name string) (int64, error) {
 			err.Error(), name)
 		return -1, err
 	}
-	id, err := setInvalid(tx, fn.folderId, name)
+	id, err := bep.SetInvalid(tx, fn.folderId, name)
 	if err != nil {
 		_ = tx.Rollback()
 		return -1, err
@@ -753,7 +807,7 @@ func (fn *FolderNode) internalStoreIndex(index *bep.Index) error {
 	}
 
 	for _, info := range index.Files {
-		id, err := storeFileInfo(tx, fn.folderId, info)
+		id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 		if err != nil {
 			log.Printf("%s when init index ", err.Error())
 			_ = tx.Rollback()
@@ -782,7 +836,7 @@ func (fn *FolderNode) internalStoreFileInfo(info *bep.FileInfo) (int64, error) {
 		return -1, err
 	}
 
-	id, err := storeFileInfo(tx, fn.folderId, info)
+	id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 	if err != nil {
 		_ = tx.Rollback()
 		return -1, err

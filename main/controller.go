@@ -211,23 +211,15 @@ func getIndexSeq(w http.ResponseWriter, r *http.Request) {
 	folderId := r.PostForm.Get("FolderId")
 	seqStr := r.PostForm.Get("seq")
 	seq, _ := strconv.ParseInt(seqStr, 10, 64)
-	tx, err := fs.GetTx()
-	if err != nil {
-		panic(err)
-	}
-	defer tx.Commit()
-	indexSeqs, err := fs.GetIndexSeqAfter(tx, int64(seq), folderId)
-	if err != nil {
-		panic(err)
+	indexSeqs := fsys.GetIndexSeqAfter(folderId, int64(seq))
+	data, err := json.MarshalIndent(indexSeqs, "", "  ")
+	if err == nil {
+		_, _ = w.Write(data)
 	} else {
-		data, err := json.MarshalIndent(indexSeqs, "", "  ")
-		if err == nil {
-			_, _ = w.Write(data)
-		} else {
-			_, _ = w.Write([]byte(err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		_, _ = w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
 	}
+
 }
 
 func getUpdateData(w http.ResponseWriter, r *http.Request) {

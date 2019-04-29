@@ -45,7 +45,7 @@ func (sm *SyncManager) receiveMsg(msg node.WrappedMessage) {
 
 func (sm *SyncManager) handleIndex(remote node.DeviceId,
 	index *bep.Index) {
-	tx, err := db.Begin()
+	tx, err := sm.cacheDb.Begin()
 
 	if err != nil {
 		log.Fatalf("%s when receice index %s %s ",
@@ -68,7 +68,7 @@ func (sm *SyncManager) handleIndex(remote node.DeviceId,
 
 func (sm *SyncManager) handleUpdate(remote node.DeviceId,
 	update *bep.IndexUpdate) {
-	tx, err := db.Begin()
+	tx, err := sm.cacheDb.Begin()
 
 	if err != nil {
 		log.Fatalf("%s when receice index %s %s ",
@@ -95,7 +95,7 @@ func (sm *SyncManager) handleClusterConfig(remote node.DeviceId,
 	config *bep.ClusterConfig) {
 	log.Printf("%s receied from %s ", config.String(),
 		remote.String())
-	tx, err := db.Begin()
+	tx, err := sm.cacheDb.Begin()
 	if err != nil {
 		log.Panic(err)
 	}
@@ -143,8 +143,17 @@ func (sm *SyncManager) existFolder(folderId string) *ShareFolder {
 
 func (sm *SyncManager) handleRequest(remote node.DeviceId,
 	req *bep.Request) {
-	resp := sm.fsys.GetBlock(req)
-	err := sm.SendMessage(remote, resp)
+	resp := new(bep.Response)
+	block, err := sm.fsys.GetData(req.Folder,
+		req.Name, req.Offset, req.Size)
+
+	if err != nil {
+		resp.Code = bep.ErrorCode_GENERIC
+	} else {
+		resp.Data = block
+	}
+
+	err = sm.SendMessage(remote, resp)
 	if err != nil {
 		sm.onDisConnected(remote)
 	}
@@ -164,12 +173,12 @@ func (sm *SyncManager) temporaryIndex(remote node.DeviceId,
 		index:     index,
 		timestamp: time.Now().Unix(),
 	}
-	tx, err := db.Begin()
+	tx, err := sm.cacheDb.Begin()
 	if err != nil {
 		panic(err)
 	}
 	log.Println("remoteID ", remote)
-	_, err = StoreReceiveIndex(tx, ri)
+	_, err = storeReceiveIndex(tx, ri)
 	if err != nil {
 		log.Printf("%s when cache received index ",
 			err.Error())
@@ -188,12 +197,12 @@ func (sm *SyncManager) temporaryUpdate(remote node.DeviceId,
 		update:    update,
 		timestamp: time.Now().Unix(),
 	}
-	tx, err := db.Begin()
+	tx, err := sm.cacheDb.Begin()
 	if err != nil {
 		panic(err)
 	}
 	log.Println("remoteID ", remote)
-	_, err = StoreReceiveUpadte(tx, ri)
+	_, err = storeReceiveUpadte(tx, ri)
 	if err != nil {
 		log.Printf("%s when cache received index ",
 			err.Error())
