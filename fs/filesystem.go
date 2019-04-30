@@ -291,15 +291,39 @@ todo
 GetIndexUpdateMap 根据输入的 indexSeq ，返回对应的
 index 和 indexUpdate
 */
-//todo 应该显示得说明folderId
+//todo 	应该显示得说明folderId
 func (fs *FileSystem) GetIndexUpdateMap(folderId string, indexSeqs []*IndexSeq) (map[int64]*bep.Index,
 	map[int64]*bep.IndexUpdate) {
-
+	fs.lock.RLock()
+	if fn, ok := fs.folders[folderId]; ok {
+		fs.lock.RUnlock()
+		return fn.getIndexUpdatesMap(indexSeqs)
+	} else {
+		fs.lock.RUnlock()
+	}
 	return nil, nil
 }
 
+func (fs *FileSystem) SetIndexSeq(index *IndexSeq) error {
+	fs.lock.RLock()
+	if fn, ok := fs.folders[index.Folder]; !ok {
+		fs.lock.RUnlock()
+		return fn.setIndexSeq(index)
+	} else {
+		fs.lock.RUnlock()
+	}
+	return nil
+}
+
 //sync 逻辑中会干预记录操作
-func (fs *FileSystem) SetFileInfo(folder string, info *bep.FileInfo) (int64, error) {
+func (fs *FileSystem) SetFileInfo(folderId string, info *bep.FileInfo) (int64, error) {
+	fs.lock.RLock()
+	if fn, ok := fs.folders[folderId]; !ok {
+		fs.lock.RUnlock()
+		return fn.internalStoreFileInfo(info)
+	} else {
+		fs.lock.RUnlock()
+	}
 	return -1, nil
 }
 
@@ -321,8 +345,9 @@ func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
 		fs.lock.RUnlock()
-		realPath := f.fl.real
+		realPath := f.realPath
 		filePath := filepath.Join(realPath, name)
+		log.Printf("get data of %s", filePath)
 		fPtr, err := os.Open(filePath)
 		if err != nil {
 			return nil, ErrNoSuchFile

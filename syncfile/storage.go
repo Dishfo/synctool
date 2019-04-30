@@ -18,13 +18,15 @@ in-memory sql
 */
 
 /**
-todo 事务处理中应该有更加细致的隔离等级划分
-*/
-
-/**
 todo 再开启一个额外的存储数据库
  对于接收到的fileinfo都会单独存储在这里
  fsys 中仅存储本地的fileInfo
+ sync　需要存储的单元
+ shareRelation
+ RemoteUpdate
+ SendUpdate
+ fileInfo
+ 这些存储都可能发生冲突
 */
 
 const (
@@ -32,24 +34,24 @@ const (
 	typeUpdate = 2
 
 	createRelationTable = `
-	create table ShareRelation (
-	id integer not null primary key autoincrement,
-	folder text,
-	readonly integer,
-	peerreadonly integer,
-	remote  integer
-	)	
-	`
+ 	create table ShareRelation (
+ 	id integer not null primary key autoincrement,
+ 	folder text,
+ 	readonly integer,
+ 	peerreadonly integer,
+ 	remote  integer
+ 	)		
+ 	`
 
 	createReceiveTable = `
-	create table ReceiveUpdate(
-	id integer not null primary key autoincrement,
-	folder text,
-	remote integer,
-	type integer,
-	seqs text,
+ 	create table ReceiveUpdate(
+ 	id integer not null primary key autoincrement,
+ 	folder text,
+ 	remote integer,
+ 	type integer,
+  	seqs text,
 	timestamp integer
-	)
+	)	
 	`
 
 	createSendUpdate = `
@@ -214,10 +216,12 @@ func storeReceivedData(tx *sql.Tx, data interface{}) (int64, error) {
 		}
 		seqs = append(seqs, id)
 	}
-	_ = tx.Commit()
 
 	seqsstr := ArrayToString(seqs)
 	stmt, err := tx.Prepare(insertReceiveIndex)
+	if err != nil {
+		log.Panic(err)
+	}
 	res, err := stmt.Exec(folder,
 		int64(remote),
 		rtype,

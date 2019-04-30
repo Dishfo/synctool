@@ -54,3 +54,75 @@ func TestFileOp(t *testing.T) {
 	restoreBak(bak)
 
 }
+
+const (
+	table1 = ` 
+	create table test1 (
+	id integer not null primary key autoincrement,
+	folder text
+	)
+	`
+	table2 = `create table test2 (
+	id integer not null primary key autoincrement,
+	folder text
+	)
+	`
+
+	i1 = `insert into test1 (folder) values (?) `
+	i2 = `insert into test1 (folder) values (?) `
+)
+
+//使用的锁是库级锁
+func TestSqlite(t *testing.T) {
+	db, err := initDB("test.db")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer db.Close()
+	db.Exec(table1)
+	db.Exec(table2)
+	go func() {
+		for {
+			tx, err := db.Begin()
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			_, err = tx.Exec(i1, "12345")
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			err = tx.Commit()
+			if err != nil {
+				log.Fatalf("%s when insert into test1",
+					err.Error())
+			}
+
+		}
+
+	}()
+
+	go func() {
+		for {
+			tx, err := db.Begin()
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			_, err = tx.Exec(i2, "12345")
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			err = tx.Commit()
+			if err != nil {
+				log.Fatalf("%s when insert into test1",
+					err.Error())
+			}
+
+		}
+	}()
+
+	select {}
+}

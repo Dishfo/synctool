@@ -615,6 +615,44 @@ func (fn *FolderNode) getIndex() *bep.Index {
 	return index
 }
 
+func (fn *FolderNode) getUpdateById(id int64) *bep.IndexUpdate {
+	fn.lock.RLock()
+	defer fn.lock.RUnlock()
+
+	if !fn.waitAvailable() {
+		return nil
+	}
+
+	tx, err := fn.dw.GetTx()
+	if err != nil {
+		log.Printf("%s when select indexUpdate on %s",
+			err.Error(), fn.folderId)
+		return nil
+	}
+	indexSeq, err := getIndexSeq(tx, id)
+	if err != nil {
+		panic(err)
+	}
+
+	update := new(bep.IndexUpdate)
+	if indexSeq != nil {
+		update := new(bep.IndexUpdate)
+		update.Folder = fn.folderId
+		update.Files = make([]*bep.FileInfo, 0)
+		for _, s := range indexSeq.Seq {
+			info, err := bep.GetInfoById(tx, s)
+			if err != nil {
+				_ = tx.Rollback()
+				return nil
+			}
+			update.Files = append(update.Files, info)
+		}
+	}
+	_ = tx.Commit()
+
+	return update
+}
+
 func (fn *FolderNode) getUpdatesAfter(id int64) []*bep.IndexUpdate {
 	fn.lock.RLock()
 	defer fn.lock.RUnlock()
@@ -708,11 +746,40 @@ func (fn *FolderNode) getIndexUpdatesMap(indexSeqs []*IndexSeq) (map[int64]*bep.
 	fn.lock.RLock()
 	defer fn.lock.RUnlock()
 
+	indexs := make(map[int64]*bep.Index)
+	updates := make(map[int64]*bep.IndexUpdate)
 	if !fn.waitAvailable() {
-		return nil, nil
+		return indexs, updates
+
 	}
 
-	return nil, nil
+	tx, err := fn.dw.GetTx()
+
+	if err != nil {
+		return indexs, updates
+	}
+
+	for _, indexSeq := range indexSeqs {
+		if fn.indexSeq == indexSeq.Id {
+			index := fn.getIndex()
+			if indexSeqs != nil {
+				indexs[indexSeq.Id] = index
+			}
+		} else {
+			update := fn.getUpdateById(indexSeq.Id)
+			if update != nil {
+				updates[indexSeq.Id] = update
+			}
+		}
+	}
+	_ = tx.Commit()
+	return indexs, updates
+
+}
+
+func (fn *FolderNode) setIndexSeq(indexSeq *IndexSeq) error {
+	_, err := fn.internalStoreIndexSeq(indexSeq)
+	return err
 }
 
 //文件操作回调函数==================================================

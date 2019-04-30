@@ -278,9 +278,12 @@ func (sm *SyncManager) EndSendUpdate() {
 //使用重试 ?????? 添加针对 database locked 测试阶段先不要添加
 //todo 我还要靠这个找bug ^ __ ^
 //定期执行的任务 修改逻辑避事务中穿插过多的 i/o
+/**
+sendUpdate 是单线程的行为
+
+*/
 func (sm *SyncManager) prepareSendUpdate() {
 	var err error
-	var otx *sql.Tx
 	var tx *sql.Tx
 	if !sm.StartSendUpdate() {
 		return
@@ -294,7 +297,6 @@ func (sm *SyncManager) prepareSendUpdate() {
 	if err != nil {
 		log.Printf("%s when preparet to send updates ",
 			err.Error())
-		_ = otx.Rollback()
 		return
 	}
 
@@ -352,10 +354,8 @@ func (sm *SyncManager) prepareSendUpdate() {
 	}
 end:
 	if err == nil {
-		_ = otx.Commit()
 		_ = tx.Commit()
 	} else {
-		_ = otx.Rollback()
 		_ = tx.Rollback()
 	}
 }

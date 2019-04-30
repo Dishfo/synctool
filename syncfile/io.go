@@ -148,10 +148,12 @@ func (sm *SyncManager) handleRequest(remote node.DeviceId,
 		req.Name, req.Offset, req.Size)
 
 	if err != nil {
+		log.Printf("%s when response ", err.Error())
 		resp.Code = bep.ErrorCode_GENERIC
 	} else {
 		resp.Data = block
 	}
+	resp.Id = req.Id
 
 	err = sm.SendMessage(remote, resp)
 	if err != nil {

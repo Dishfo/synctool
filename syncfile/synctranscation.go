@@ -333,9 +333,9 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		}
 
 		repeatCount := 15
-		err := storeFileInfos(infos, folderId)
+		err := sm.storeFileInfos(infos, folderId)
 		for ; err != nil && repeatCount > 0; repeatCount-- {
-			err = storeFileInfos(infos, folderId)
+			err = sm.storeFileInfos(infos, folderId)
 		}
 
 		if repeatCount == 0 {
@@ -345,9 +345,12 @@ func (sm *SyncManager) syncFolder(folderId string) {
 }
 
 //TODO　修改这个函数
-func storeFileInfos(infoIds []int64, folder string) error {
-
-	return nil
+func (sm *SyncManager) storeFileInfos(infoIds []int64, folder string) error {
+	indexSeq := fs.IndexSeq{
+		Folder: folder,
+		Seq:    infoIds,
+	}
+	return sm.fsys.SetIndexSeq(&indexSeq)
 }
 
 func (sm *SyncManager) LocalId() node.DeviceId {
