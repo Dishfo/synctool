@@ -24,6 +24,7 @@
         <method importPath="database/sql" receiver="*Rows" name="Close" />
         <method importPath="os" receiver="*File" name="Close" />
         <method importPath="database/sql" receiver="*Tx" name="Commit" />
+        <method importPath="database/sql" receiver="*DB" name="Close" />
       </methods>
     </inspection_tool>
   </profile>
