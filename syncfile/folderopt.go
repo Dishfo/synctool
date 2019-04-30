@@ -106,7 +106,6 @@ func (sm *SyncManager) AddFolder(opt *FolderOption) error {
 	sm.folderLock.Unlock()
 	sm.onAddFolder(f)
 	sm.onFoldersChange()
-
 	return nil
 }
 
@@ -141,6 +140,12 @@ func (sm *SyncManager) EditFolder(opts map[string]interface{},
 	folderId string) error {
 	sm.folderLock.Lock()
 
+	if id, ok := opts["Id"]; ok {
+		if id.(string) != folderId {
+			return errors.New("shouldn't set new folderId")
+		}
+	}
+
 	if share, ok := sm.folders[folderId]; ok {
 		newShare := new(ShareFolder)
 		newShare.Copy(share)
@@ -157,6 +162,7 @@ func (sm *SyncManager) EditFolder(opts map[string]interface{},
 				return err
 			}
 		}
+
 		sm.folders[folderId] = newShare
 	} else {
 		sm.folderLock.Unlock()
@@ -182,6 +188,7 @@ func setValue(field reflect.Value, v interface{}) error {
 	}
 	field.Set(rv)
 	return nil
+
 }
 
 //在	添加节点的共享构成发生变化时使用 向各个节点发送新的 clusterConfig
@@ -252,11 +259,6 @@ func calculateRelations(sf *ShareFolder,
 	return relation
 }
 
-//callback when edit options of a folder
-func (sm *SyncManager) onEditFolder(folder *ShareFolder) {
-
-}
-
 //修正标记位表示sync模块开始进行
 func (sm *SyncManager) StartSendUpdate() bool {
 	sm.folderLock.Lock()
@@ -279,8 +281,8 @@ func (sm *SyncManager) EndSendUpdate() {
 //todo 我还要靠这个找bug ^ __ ^
 //定期执行的任务 修改逻辑避事务中穿插过多的 i/o
 /**
-sendUpdate 是单线程的行为
-
+sendUpdate 是单线程的行为,sendUpdate 仅仅只是读写sendUpdate表
+并且读取 received update ,在一个时刻　如果没有读取到就主观认为没有收到
 */
 func (sm *SyncManager) prepareSendUpdate() {
 	var err error
@@ -304,9 +306,10 @@ func (sm *SyncManager) prepareSendUpdate() {
 		relations, err := GetRelationOfDevice(tx, dev)
 
 		if err != nil {
+			_ = tx.Rollback()
 			log.Printf(" %s when get relations of %s ",
 				err.Error(), dev.String())
-			goto end
+			return
 		}
 		for _, relation := range relations {
 
@@ -317,51 +320,46 @@ func (sm *SyncManager) prepareSendUpdate() {
 			if err != nil {
 				log.Printf(" %s when get SendUpdates of %s ",
 					err.Error(), dev.String())
-				goto end
+				_ = tx.Rollback()
+				return
 			}
+
+			_ = tx.Commit()
 			tagMap := make(map[int64]bool)
 			for _, su := range sus {
 				tagMap[su.UpdateId] = true
 			}
 			indexSeqs := sm.fsys.GetIndexSeqAfter(relation.Folder, 0)
-
 			if err != nil {
 				log.Printf(" %s whecd n get indexSeqs of %s ",
 					err.Error(), dev.String())
-				goto end
+
 			}
 			readySend := make([]*fs.IndexSeq, 0)
 			for _, indexSeq := range indexSeqs {
 				if !tagMap[indexSeq.Id] {
-
 					readySend = append(readySend, indexSeq)
 				}
 			}
-
 			indexs, updates :=
 				sm.getUpdatesByIndexSeq(relation.Folder, readySend)
 			for id, index := range indexs {
 				log.Println(index)
 				sm.sendUpdate(dev,
-					index, relation.Folder, tx, id)
+					index, relation.Folder, id)
 			}
+			logStruct(updates)
 			for id, update := range updates {
-				log.Println(update)
 				sm.sendUpdate(dev,
-					update, relation.Folder, tx, id)
+					update, relation.Folder, id)
 			}
 		}
 	}
-end:
-	if err == nil {
-		_ = tx.Commit()
-	} else {
-		_ = tx.Rollback()
-	}
+
 }
 
 func (sm *SyncManager) sendUpdate(remote node.DeviceId,
-	data interface{}, folderId string, tx *sql.Tx, uid int64) {
+	data interface{}, folderId string, uid int64) {
 	err := sm.SendMessage(remote, data)
 	if err == nil {
 		su := &SendUpdate{
@@ -369,11 +367,7 @@ func (sm *SyncManager) sendUpdate(remote node.DeviceId,
 			UpdateId: uid,
 			Remote:   remote,
 		}
-		id, err := storeSendUpdate(tx, su)
-		log.Println(id)
-		if err != nil {
-			log.Println(err.Error())
-		}
+		sm.storeSendUpdate(su)
 	} else {
 		log.Println(err.Error())
 		sm.DisConnection(remote)

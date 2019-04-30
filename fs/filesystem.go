@@ -339,12 +339,21 @@ func (fs *FileSystem) getFolderIndexId(folderId string) int64 {
 var (
 	ErrNoSuchFile  = errors.New("no such file")
 	ErrInvalidSize = errors.New("except size is invalid")
+	ErrInvalidFile = errors.New("file is invalid")
 )
+
+/**
+GetData return data block
+
+*/
 
 func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]byte, error) {
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
 		fs.lock.RUnlock()
+		if f.isInvalid(name) {
+			return nil, ErrInvalidFile
+		}
 		realPath := f.realPath
 		filePath := filepath.Join(realPath, name)
 		log.Printf("get data of %s", filePath)

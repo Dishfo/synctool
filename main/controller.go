@@ -132,6 +132,55 @@ func AddFolder(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func EditFolder(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	folderId := r.PostForm.Get("FolderId")
+	data, err := parseForm(r.Form)
+	if err != nil {
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
+	err = sm.EditFolder(data, folderId)
+	if err != nil {
+		_, _ = w.Write([]byte(err.Error()))
+	} else {
+		_, _ = w.Write([]byte("OK"))
+	}
+}
+
+//folder field names
+const (
+	idField       = "Id"
+	labelField    = "Label"
+	realField     = "Real"
+	readOnlyField = "ReadOnly"
+	devicesField  = "Devices"
+)
+
+//将form 中数据转化为map 集合
+func parseForm(form url.Values) (map[string]interface{}, error) {
+	data := make(map[string]interface{})
+	var err error
+	data[idField] = form.Get("Id")
+	data[readOnlyField], err = strconv.ParseBool(form.Get("ReadOnly"))
+	if err != nil {
+		return nil, err
+	}
+	data[labelField] = form.Get("Label")
+	data[realField] = form.Get("Real")
+	deviceStr := form.Get("Devices")
+	devices := strings.Split(deviceStr, ",")
+	devs := make([]string, 0)
+	for _, device := range devices {
+		if device == "" {
+			continue
+		}
+		devs = append(devs, device)
+	}
+	data[devicesField] = devs
+	return data, nil
+}
+
 const (
 	HostIdTag = "HostId"
 )

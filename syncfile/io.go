@@ -1,8 +1,11 @@
 package syncfile
 
 import (
+	"bytes"
+	"crypto/md5"
 	"log"
 	"syncfolders/bep"
+	"syncfolders/fs"
 	"syncfolders/node"
 	"time"
 )
@@ -146,15 +149,31 @@ func (sm *SyncManager) handleRequest(remote node.DeviceId,
 	resp := new(bep.Response)
 	block, err := sm.fsys.GetData(req.Folder,
 		req.Name, req.Offset, req.Size)
-
+	resp.Id = req.Id
 	if err != nil {
 		log.Printf("%s when response ", err.Error())
-		resp.Code = bep.ErrorCode_GENERIC
+		switch err {
+		case fs.ErrInvalidSize:
+			resp.Code = bep.ErrorCode_GENERIC
+		case fs.ErrInvalidFile:
+			resp.Code = bep.ErrorCode_INVALID_FILE
+		case fs.ErrNoSuchFile:
+			resp.Code = bep.ErrorCode_NO_SUCH_FILE
+		}
 	} else {
+		if block == nil {
+			resp.Code = bep.ErrorCode_GENERIC
+			goto send
+		}
+		hash := md5.Sum(block)
+		if bytes.Compare(hash[:], req.Hash) != 0 {
+			resp.Code = bep.ErrorCode_GENERIC
+			goto send
+		}
 		resp.Data = block
 	}
-	resp.Id = req.Id
 
+send:
 	err = sm.SendMessage(remote, resp)
 	if err != nil {
 		sm.onDisConnected(remote)

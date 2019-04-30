@@ -113,9 +113,15 @@ func (sm *SyncManager) preparedConnect() {
 	sm.devLock.Unlock()
 	var wg sync.WaitGroup
 	for k := range backups {
+
+		if sm.cn.ConnectionState(k) != node.Connected {
+			sm.DisConnection(k)
+		}
+
 		if sm.isConnectd(k) {
 			continue
 		}
+
 		wg.Add(1)
 		id := k
 		go func() {

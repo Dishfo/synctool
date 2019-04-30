@@ -633,15 +633,14 @@ func (fn *FolderNode) getUpdateById(id int64) *bep.IndexUpdate {
 	if err != nil {
 		panic(err)
 	}
-
 	update := new(bep.IndexUpdate)
 	if indexSeq != nil {
-		update := new(bep.IndexUpdate)
 		update.Folder = fn.folderId
 		update.Files = make([]*bep.FileInfo, 0)
 		for _, s := range indexSeq.Seq {
 			info, err := bep.GetInfoById(tx, s)
 			if err != nil {
+				log.Println(err)
 				_ = tx.Rollback()
 				return nil
 			}
@@ -690,6 +689,15 @@ func (fn *FolderNode) getUpdatesAfter(id int64) []*bep.IndexUpdate {
 	_ = tx.Commit()
 
 	return updates
+}
+
+func (fn *FolderNode) isInvalid(name string) bool {
+	tx, err := fn.dw.GetTx()
+	if err != nil {
+		return false
+	}
+	defer tx.Commit()
+	return bep.IsInvalid(tx, fn.folderId, name)
 }
 
 func (fn *FolderNode) getIndexSeq(id int64) *IndexSeq {
@@ -756,6 +764,7 @@ func (fn *FolderNode) getIndexUpdatesMap(indexSeqs []*IndexSeq) (map[int64]*bep.
 	tx, err := fn.dw.GetTx()
 
 	if err != nil {
+		log.Println(err)
 		return indexs, updates
 	}
 
@@ -766,6 +775,7 @@ func (fn *FolderNode) getIndexUpdatesMap(indexSeqs []*IndexSeq) (map[int64]*bep.
 				indexs[indexSeq.Id] = index
 			}
 		} else {
+			log.Println("will get indexUpdate ")
 			update := fn.getUpdateById(indexSeq.Id)
 			if update != nil {
 				updates[indexSeq.Id] = update

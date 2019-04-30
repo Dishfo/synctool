@@ -185,6 +185,35 @@ func StoreFileInfo(tx *sql.Tx, folder string, info *FileInfo) (int64, error) {
 	return id, nil
 }
 
+func GetFileInfoByName(tx *sql.Tx, folderId, name string) (*FileInfo, error) {
+	stmt, err := tx.Prepare(selectInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query(folderId, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		info := new(FileInfo)
+		fillFileInfo(rows, info)
+		return info, nil
+	}
+	return nil, nil
+}
+
+func IsInvalid(tx *sql.Tx, folderId, name string) bool {
+	info, err := GetFileInfoByName(tx, folderId, name)
+	if err != nil || info == nil {
+		return false
+	} else {
+		return info.Invalid
+	}
+}
+
 func GetFileInfos(tx *sql.Tx, ids []int64) ([]*FileInfo, error) {
 	fileInfos := make([]*FileInfo, 0)
 	for _, id := range ids {
