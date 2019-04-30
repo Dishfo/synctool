@@ -42,6 +42,18 @@ func (sm *SyncManager) addDevice(dev *bep.Device) {
 	}
 }
 
+func (sm *SyncManager) RemoveDeice(device string) {
+	sm.devLock.Lock()
+	defer sm.devLock.Unlock()
+	devId, err := node.GenerateIdFromString(device)
+	if err != nil {
+		return
+	}
+	delete(sm.devices, devId)
+	sm.DisConnection(devId)
+	delete(sm.hostIds, devId)
+}
+
 //with lock
 func (sm *SyncManager) Devices() []*bep.Device {
 	devices := make([]*bep.Device, 0)

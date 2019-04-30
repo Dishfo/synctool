@@ -11,6 +11,9 @@ func route() {
 
 	http.HandleFunc("/addFolder", AddFolder)
 	http.HandleFunc("/addDevice", AddDevice)
+	http.HandleFunc("/editFolder", EditFolder)
+	http.HandleFunc("/removeFolder", nil)
+	http.HandleFunc("/removeDevice", nil)
 
 	http.HandleFunc("/devices", DeviceInfos)
 	http.HandleFunc("/folders", FolderInfos)

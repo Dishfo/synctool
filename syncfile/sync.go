@@ -144,7 +144,7 @@ func (sm *SyncManager) setupTimerTask() {
 	})
 
 	sm.tm.AddTask(Task{
-		Dur:  int64(time.Second * 5),
+		Dur:  int64(time.Second * 3),
 		Type: TASK_DUR,
 		Act: func() {
 			sm.prepareSendUpdate()

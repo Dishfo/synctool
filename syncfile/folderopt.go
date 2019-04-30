@@ -173,6 +173,13 @@ func (sm *SyncManager) EditFolder(opts map[string]interface{},
 	return nil
 }
 
+func (sm *SyncManager) RemoveFolder(folderId string) {
+	sm.folderLock.Lock()
+	defer sm.folderLock.Unlock()
+	sm.fsys.RemoveFolder(folderId)
+	sm.onFoldersChange()
+}
+
 var (
 	ErrNotMatchType = errors.New("field is not macth with value ")
 	ErrCantSetField = errors.New("can't set this field ")

@@ -148,6 +148,18 @@ func EditFolder(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func RemoveFolder(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	folderId := r.Form.Get("FolderId")
+	sm.RemoveFolder(folderId)
+}
+
+func RemoveDevice(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	device := r.Form.Get("Device")
+	sm.RemoveDeice(device)
+}
+
 //folder field names
 const (
 	idField       = "Id"
