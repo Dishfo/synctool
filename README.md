@@ -40,7 +40,7 @@ FolderOpts {
 ```
 
 |URL | Method | Post | Response |Description|
-|----|--------|-----|----------|--------|
+|:----|:--------|:-----|:----------|:--------|
 |/addFolder|POST | FolderOpts | Message  | 添加新的共享文件夹 
 |/addDevice|POST | DeviceId, HostId |   Message   | 添加新的设备节点
 |/editFolder|POST | FolderId,FolderOpts |    Message  | 修改共享文件夹属性 
