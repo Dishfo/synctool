@@ -46,3 +46,6 @@ FolderOpts {
 |/editFolder|POST | FolderId,FolderOpts |    Message  | 修改共享文件夹属性 
 |/removeFolder|POST | DeviceId |  Message    | 移除共享文件夹 
 |/removeDevice|POST | DeviceId | Message     | 移除设备 
+
+|/devices|GET |  | devices     | 获取设备列表 
+|/folders|GET |  | folders     | 获取文件夹信息
