@@ -3,6 +3,7 @@ package syncfile
 import (
 	"bytes"
 	"crypto/md5"
+	"github.com/mattn/go-sqlite3"
 	"log"
 	"syncfolders/bep"
 	"syncfolders/fs"
@@ -11,6 +12,7 @@ import (
 )
 
 //todo 事务的隔离等级是程序逻辑能否顺利执行的关键
+//接收函数也是单线程 舒服啊
 func (sm *SyncManager) receiveWorker() {
 	messages := sm.cn.Messages()
 
@@ -40,8 +42,6 @@ func (sm *SyncManager) receiveMsg(msg node.WrappedMessage) {
 	case *bep.Request:
 		sm.handleRequest(msg.Remote, realmsg.(*bep.Request))
 	case *bep.Response:
-		log.Printf("receive resp ")
-		logStruct(realmsg.(*bep.Response))
 		sm.handleResponse(msg.Remote, realmsg.(*bep.Response))
 	}
 }
@@ -55,7 +55,7 @@ func (sm *SyncManager) handleIndex(remote node.DeviceId,
 			err.Error(), index.Folder, remote.String())
 	}
 
-	if !HasRelation(tx, index.Folder, remote) {
+	if !hasRelation(tx, index.Folder, remote) {
 		tx.Commit()
 		return
 	}
@@ -66,7 +66,6 @@ func (sm *SyncManager) handleIndex(remote node.DeviceId,
 		log.Printf("repeat for %s \n", err.Error())
 		err = sm.temporaryIndex(remote, index)
 	}
-	log.Println("compete")
 }
 
 func (sm *SyncManager) handleUpdate(remote node.DeviceId,
@@ -78,7 +77,7 @@ func (sm *SyncManager) handleUpdate(remote node.DeviceId,
 			err.Error(), update.Folder, remote.String())
 	}
 
-	if !HasRelation(tx, update.Folder, remote) {
+	if !hasRelation(tx, update.Folder, remote) {
 		tx.Commit()
 		return
 	}
@@ -94,14 +93,28 @@ func (sm *SyncManager) handleUpdate(remote node.DeviceId,
 }
 
 //先确立连接后 在发送 config  保证任何一方不会丢失数据
+
+/**
+节点可能会发送多个config,有可能出现某个关系的移除
+获取原来的关系表，
+构建新的关系表
+保证这个处理过程为线程安全
+
+*/
+
+//todo 此处的事务需要是串行
 func (sm *SyncManager) handleClusterConfig(remote node.DeviceId,
 	config *bep.ClusterConfig) {
-	log.Printf("%s receied from %s ", config.String(),
-		remote.String())
+	//log.Printf("%s receied from %s ", config.String(),
+	//	remote.String())
+	sm.folderLock.Lock()
+	defer sm.folderLock.Unlock()
+
 	tx, err := sm.cacheDb.Begin()
 	if err != nil {
 		log.Panic(err)
 	}
+
 	relations := make([]*ShareRelation, 0)
 	for _, folder := range config.Folders {
 		share := sm.existFolder(folder.Id)
@@ -111,31 +124,110 @@ func (sm *SyncManager) handleClusterConfig(remote node.DeviceId,
 		if !containDevice(remote, share.Devices) {
 			continue
 		}
-		if !HasRelation(tx, share.Id, remote) {
-			relation := &ShareRelation{
-				ReadOnly:     share.ReadOnly,
-				PeerReadOnly: folder.ReadOnly,
-				Folder:       share.Id,
-				Remote:       remote,
-			}
-			_, _ = StoreRelation(tx, relation)
-			relations = append(relations, relation)
+		relation := &ShareRelation{
+			ReadOnly:     share.ReadOnly,
+			PeerReadOnly: folder.ReadOnly,
+			Folder:       share.Id,
+			Remote:       remote,
 		}
+		relations = append(relations, relation)
 	}
-	devRelations, err := GetRelationOfDevice(tx, remote)
+	oldRelations, err := sm.GetRelationOfDevice(remote)
 	if err != nil {
 		panic(err)
 	}
+	_ = tx.Commit()
+	sm.setNewRelation(oldRelations, relations)
+}
+
+//需要保证后面的数据库操作成功，不然就终止整个程序
+func (sm *SyncManager) setNewRelation(oldRelations, relations []*ShareRelation) {
+	toDelete := make([]int64, 0)
+	toAdd := make([]*ShareRelation, 0)
+
 	relationMap := make(map[string]bool)
-	for _, r := range devRelations {
+	newRelationMap := make(map[string]bool)
+	for _, r := range oldRelations {
 		relationMap[r.Folder] = true
 	}
+
 	for _, r := range relations {
-		if !relationMap[r.Folder] {
-			DeleteRelation(tx, r.Id)
+		newRelationMap[r.Folder] = true
+		if relationMap[r.Folder] {
+			toAdd = append(toAdd, r)
 		}
 	}
-	_ = tx.Commit()
+
+	for _, r := range oldRelations {
+		if !newRelationMap[r.Folder] {
+			toDelete = append(toDelete, r.Id)
+		}
+	}
+
+	err := sm.addRelations(toAdd)
+	for err != sqlite3.ErrLocked {
+		log.Println(err, " when insert relations")
+		err = sm.addRelations(toAdd)
+	}
+
+	err = sm.deleteRelations(toDelete)
+	for err != sqlite3.ErrLocked {
+		log.Println(err, " when delete relations")
+		err = sm.deleteRelations(toDelete)
+	}
+
+	if err != nil {
+		log.Panic(err)
+	}
+}
+
+func (sm *SyncManager) deleteRelations(ids []int64) error {
+	tx, err := sm.cacheDb.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		err := DeleteRelation(tx, id)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (sm *SyncManager) addRelations(relations []*ShareRelation) error {
+	tx, err := sm.cacheDb.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, r := range relations {
+		_, err = storeRelation(tx, r)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (sm *SyncManager) GetRelationOfDevice(device node.DeviceId) ([]*ShareRelation, error) {
+	tx, err := sm.cacheDb.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+	return getRelationOfDevice(tx, device)
 }
 
 func (sm *SyncManager) existFolder(folderId string) *ShareFolder {

@@ -149,6 +149,12 @@ const (
 	delete from ShareRelaton 
 	where folder = ? and remote = ? 
 	`
+
+	updateRelationsql = `
+		update ShareRelaton 
+	set peerreadonly = ? ,readonly = ?  
+	where remote = ? and folder = ?
+	`
 )
 
 const (

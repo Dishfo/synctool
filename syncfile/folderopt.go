@@ -3,6 +3,7 @@ package syncfile
 import (
 	"database/sql"
 	"errors"
+	"github.com/mattn/go-sqlite3"
 	"log"
 	"reflect"
 	"sync"
@@ -103,8 +104,8 @@ func (sm *SyncManager) AddFolder(opt *FolderOption) error {
 
 	f := newShareFolder(opt)
 	sm.folders[opt.Id] = f
-	sm.folderLock.Unlock()
 	sm.onAddFolder(f)
+	sm.folderLock.Unlock()
 	sm.onFoldersChange()
 	return nil
 }
@@ -162,14 +163,14 @@ func (sm *SyncManager) EditFolder(opts map[string]interface{},
 				return err
 			}
 		}
-
 		sm.folders[folderId] = newShare
+		sm.onEditFolder(newShare, share.Attribute())
+		sm.folderLock.Unlock()
+		sm.onFoldersChange()
 	} else {
 		sm.folderLock.Unlock()
 		return ErrNonsexist
 	}
-	sm.folderLock.Unlock()
-	sm.onFoldersChange()
 	return nil
 }
 
@@ -211,15 +212,68 @@ func (sm *SyncManager) onFoldersChange() {
 	}
 }
 
-//callback when add a folder
-func (sm *SyncManager) onAddFolder(folder *ShareFolder) {
-	localId := sm.LocalId()
-	for _, dev := range folder.Devices {
+//todo 修改此处的程序逻辑
+//callback when　edit a folder 修改一个folder属性后　可能
+//会移除共享关系　也可能会产生新的共享关系
+func (sm *SyncManager) onEditFolder(folder *ShareFolder, older *FolderAttribute) {
+	toDel := make([]string, 0)
+	toAdd := make([]string, 0)
+
+	oldDevMap := make(map[string]bool)
+	newDevMap := make(map[string]bool)
+
+	for _, s := range older.Devices {
+		oldDevMap[s] = true
+	}
+
+	for _, s := range folder.Devices {
+		newDevMap[s] = true
+		if !oldDevMap[s] {
+			toAdd = append(toAdd, s)
+		}
+	}
+
+	for _, s := range older.Devices {
+		if !newDevMap[s] {
+			toDel = append(toDel, s)
+		}
+	}
+
+	for _, dev := range toDel {
+		devId, err := node.GenerateIdFromString(dev)
+		if err != nil {
+			continue
+		}
+		sm.DeleteRelations(older.Id, devId)
+	}
+
+	for _, dev := range toAdd {
 		devId, err := node.GenerateIdFromString(dev)
 		if err != nil {
 			continue
 		}
 
+		folder := getFolder(older.Id, devId)
+		if folder == nil {
+			continue
+		}
+
+		sm.UpdateRelation(&ShareRelation{
+			Folder:       older.Id,
+			Remote:       devId,
+			ReadOnly:     folder.ReadOnly,
+			PeerReadOnly: folder.ReadOnly,
+		})
+	}
+
+}
+
+//callback when add a folder
+func (sm *SyncManager) onAddFolder(folder *ShareFolder) {
+	localId := sm.LocalId()
+	devices := sm.Devices()
+	for _, dev := range devices {
+		devId := node.GenerateIdFromBytes(dev.Id)
 		img := getFoldersImages(devId)
 		if img == nil {
 			continue
@@ -236,7 +290,7 @@ func (sm *SyncManager) onAddFolder(folder *ShareFolder) {
 				if err != nil {
 					panic(err)
 				}
-				_, err = StoreRelation(tx, r)
+				_, err = storeRelation(tx, r)
 				if err != nil {
 					log.Printf("%s when  store relations ",
 						err.Error())
@@ -287,9 +341,10 @@ func (sm *SyncManager) EndSendUpdate() {
 //使用重试 ?????? 添加针对 database locked 测试阶段先不要添加
 //todo 我还要靠这个找bug ^ __ ^
 //定期执行的任务 修改逻辑避事务中穿插过多的 i/o
+
 /**
-sendUpdate 是单线程的行为,sendUpdate 仅仅只是读写sendUpdate表
-并且读取 received update ,在一个时刻　如果没有读取到就主观认为没有收到
+sendUpdate 是单线程的行为,sendUpdate仅仅只是读写sendUpdate表
+并且读取 received update ,在一个时刻如果没有读取到就主观认为没有收到
 
 */
 func (sm *SyncManager) prepareSendUpdate() {
@@ -304,15 +359,13 @@ func (sm *SyncManager) prepareSendUpdate() {
 	devIds := sm.getConnectedDevice()
 
 	for _, dev := range devIds {
-
 		tx, err = sm.cacheDb.Begin()
 		if err != nil {
 			log.Printf("%s when preparet to send updates ",
 				err.Error())
 			return
 		}
-		relations, err := GetRelationOfDevice(tx, dev)
-
+		relations, err := getRelationOfDevice(tx, dev)
 		if err != nil {
 			_ = tx.Rollback()
 			log.Printf(" %s when get relations of %s ",
@@ -320,14 +373,11 @@ func (sm *SyncManager) prepareSendUpdate() {
 			_ = tx.Rollback()
 			return
 		}
-
 		_ = tx.Commit()
 		for _, relation := range relations {
-
 			if relation.PeerReadOnly {
 				continue
 			}
-
 			tx, err = sm.cacheDb.Begin()
 			if err != nil {
 				log.Printf("%s when preparet to send updates ",
@@ -342,20 +392,20 @@ func (sm *SyncManager) prepareSendUpdate() {
 				_ = tx.Rollback()
 				return
 			}
-
 			_ = tx.Commit()
 
 			tagMap := make(map[int64]bool)
 			for _, su := range sus {
 				tagMap[su.UpdateId] = true
 			}
+
 			indexSeqs := sm.fsys.GetIndexSeqAfter(relation.Folder, 0)
 			if err != nil {
 				log.Printf(" %s whecd n get indexSeqs of %s ",
 					err.Error(), dev.String())
 				return
-
 			}
+
 			readySend := make([]*fs.IndexSeq, 0)
 			for _, indexSeq := range indexSeqs {
 				if !tagMap[indexSeq.Id] {
@@ -370,6 +420,7 @@ func (sm *SyncManager) prepareSendUpdate() {
 				sm.sendUpdate(dev,
 					index, relation.Folder, id)
 			}
+
 			logStruct(updates)
 			for id, update := range updates {
 				sm.sendUpdate(dev,
@@ -377,7 +428,6 @@ func (sm *SyncManager) prepareSendUpdate() {
 			}
 		}
 	}
-
 }
 
 func (sm *SyncManager) sendUpdate(remote node.DeviceId,
@@ -394,11 +444,65 @@ func (sm *SyncManager) sendUpdate(remote node.DeviceId,
 		log.Println(err.Error())
 		sm.DisConnection(remote)
 	}
-
 }
 
-//严格区分index indexUpdate
+//严格区分ind	ex indexUpdate
 func (sm *SyncManager) getUpdatesByIndexSeq(folderId string, indexSeqs []*fs.IndexSeq) (map[int64]*bep.Index,
 	map[int64]*bep.IndexUpdate) {
 	return sm.fsys.GetIndexUpdateMap(folderId, indexSeqs)
+}
+
+//relation operation
+//保证删除成功
+func (sm *SyncManager) DeleteRelations(folderId string, remote node.DeviceId) {
+	err := sm.deleteRelation(folderId, remote)
+	for err != sqlite3.ErrLocked {
+		err = sm.deleteRelation(folderId, remote)
+	}
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+}
+
+func (sm *SyncManager) UpdateRelation(relation *ShareRelation) {
+	err := sm.updateRelation(relation)
+	for err != sqlite3.ErrLocked {
+		err = sm.updateRelation(relation)
+	}
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+}
+
+func (sm *SyncManager) updateRelation(relation *ShareRelation) error {
+	tx, err := sm.cacheDb.Begin()
+	if err != nil {
+		return err
+	}
+
+	if !hasRelation(tx, relation.Folder, relation.Remote) {
+		_, err = storeRelation(tx, relation)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	} else {
+		_.err = updateRelation(tx, relation)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	_ = tx.Commit()
+	return nil
+}
+
+func (sm *SyncManager) deleteRelation(folderId string, remote node.DeviceId) error {
+	tx, err := sm.cacheDb.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Commit()
+	return DeleteRelationSpec(tx, folderId, remote)
 }

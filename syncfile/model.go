@@ -36,6 +36,7 @@ var (
 	lock         sync.Mutex
 )
 
+//记录收到的cluster Config中的folders
 func onReceiveClusterConfig(remote node.DeviceId,
 	config *bep.ClusterConfig) {
 	image := new(ShareFoldersImage)
@@ -52,20 +53,42 @@ func getFoldersImages(remote node.DeviceId) *ShareFoldersImage {
 	return folderImages[remote]
 }
 
+func getFolder(folderId string, remote node.DeviceId) *bep.Folder {
+	lock.Lock()
+	defer lock.Unlock()
+	img := folderImages[remote]
+	if img == nil {
+		return nil
+	}
+	for _, folder := range img.folders {
+		if folder.Id == folderId {
+			return folder
+		}
+	}
+
+	return nil
+}
+
 /**
 提供关系存储的访问函数
 */
 
-func DeleteRelation(tx *sql.Tx, id int64) {
+func DeleteRelation(tx *sql.Tx, id int64) error {
 	stmt, _ := tx.Prepare(deleteRelation)
-	_, _ = stmt.Exec(id)
+	_, err := stmt.Exec(id)
+
+	return err
 }
 
-func DeleteRelationSpec(tx *sql.Tx, remote node.DeviceId, folder string) {
+func DeleteRelationSpec(tx *sql.Tx, folder string, remote node.DeviceId) error {
+	stmt, _ := tx.Prepare(deleteRelationByRemoteAndFolder)
 
+	_, err := stmt.Exec(folder, int64(remote))
+
+	return err
 }
 
-func StoreRelation(tx *sql.Tx, r *ShareRelation) (int64, error) {
+func storeRelation(tx *sql.Tx, r *ShareRelation) (int64, error) {
 	stmt, err := tx.Prepare(insertRelation)
 	if err != nil {
 		return 0, err
@@ -84,11 +107,20 @@ func StoreRelation(tx *sql.Tx, r *ShareRelation) (int64, error) {
 	return id, nil
 }
 
-func GetRelationOfFolder(tx *sql.Tx, folder string) ([]*ShareRelation, error) {
-	return interalSelectRelation(tx, selectRelationOfFolder, folder)
+func updateRelation(tx *sql.Tx, r *ShareRelation) error {
+	stmt, err := tx.Prepare(updateRelationsql)
+	if err != nil {
+		return err
+	}
+
+	_, err = stmt.Exec(r.PeerReadOnly, r.ReadOnly,
+		int64(r.Remote), r.Folder)
+	if err != nil {
+		return err
+	}
 }
 
-func GetRelationOfDevice(tx *sql.Tx,
+func getRelationOfDevice(tx *sql.Tx,
 	remote node.DeviceId) ([]*ShareRelation, error) {
 	return interalSelectRelation(tx, selectRelationOfDevice, int64(remote))
 }
@@ -115,7 +147,7 @@ func interalSelectRelation(tx *sql.Tx, sqlcmd string, values ...interface{}) ([]
 	return relations, nil
 }
 
-func HasRelation(tx *sql.Tx, folder string, remote node.DeviceId) bool {
+func hasRelation(tx *sql.Tx, folder string, remote node.DeviceId) bool {
 	stmt, err := tx.Prepare(selectRelationFolderWithDev)
 	if err != nil {
 		return false
