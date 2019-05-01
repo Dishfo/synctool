@@ -15,10 +15,9 @@ const (
 //storeSendUpdate 在发送update 后调用，需要保证这个函数成功
 func (sm *SyncManager) storeSendUpdate(su *SendUpdate) {
 	err := sm.internalStoreSendUpdate(su)
-	maxTime := maxRetryTime
-	for err != nil && maxTime > 0 {
+
+	for err != nil {
 		err = sm.internalStoreSendUpdate(su)
-		maxTime -= 1
 	}
 
 	if err != nil {
@@ -36,6 +35,6 @@ func (sm *SyncManager) internalStoreSendUpdate(su *SendUpdate) error {
 		_ = tx.Rollback()
 		return err
 	}
-	_ = tx.Commit()
-	return nil
+	err = tx.Commit()
+	return err
 }

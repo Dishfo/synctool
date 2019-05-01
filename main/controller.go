@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -35,6 +36,16 @@ func (h H) ConfirmHello(hello *bep.Hello) bool {
 		return false
 	}
 	return true
+}
+
+const (
+	MsgOK  = "ok"
+	MesErr = "error"
+)
+
+type Message struct {
+	State string
+	Text  string
 }
 
 func initNode() {
@@ -127,8 +138,14 @@ func AddFolder(w http.ResponseWriter, r *http.Request) {
 	err = sm.AddFolder(opt)
 
 	if err != nil {
-		log.Printf("%s when add folder", err.Error())
-		_, _ = w.Write([]byte(err.Error()))
+		_, _ = writeMsg(w, Message{
+			State: MesErr,
+			Text:  err.Error(),
+		})
+	} else {
+		_, _ = writeMsg(w, Message{
+			State: MsgOK,
+		})
 	}
 }
 
@@ -142,9 +159,14 @@ func EditFolder(w http.ResponseWriter, r *http.Request) {
 	}
 	err = sm.EditFolder(data, folderId)
 	if err != nil {
-		_, _ = w.Write([]byte(err.Error()))
+		_, _ = writeMsg(w, Message{
+			State: MesErr,
+			Text:  err.Error(),
+		})
 	} else {
-		_, _ = w.Write([]byte("OK"))
+		_, _ = writeMsg(w, Message{
+			State: MsgOK,
+		})
 	}
 }
 
@@ -152,12 +174,18 @@ func RemoveFolder(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	folderId := r.Form.Get("FolderId")
 	sm.RemoveFolder(folderId)
+	_, _ = writeMsg(w, Message{
+		State: MsgOK,
+	})
 }
 
 func RemoveDevice(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	device := r.Form.Get("Device")
 	sm.RemoveDeice(device)
+	_, _ = writeMsg(w, Message{
+		State: MsgOK,
+	})
 }
 
 //folder field names
@@ -208,6 +236,9 @@ func AddDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	hostId := r.Form.Get(HostIdTag)
 	sm.NewDevice(device, hostId)
+	_, _ = writeMsg(w, Message{
+		State: MsgOK,
+	})
 }
 
 func DeviceInfos(w http.ResponseWriter, r *http.Request) {
@@ -331,4 +362,9 @@ func parseDevice(data url.Values,
 	}
 	dev.Id = devId.Bytes()
 	return nil
+}
+
+func writeMsg(w io.Writer, msg Message) (int, error) {
+	data, _ := json.Marshal(&msg)
+	return w.Write(data)
 }

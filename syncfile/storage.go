@@ -311,7 +311,7 @@ func getReceiveUpdateAfter(tx *sql.Tx, id int64, folderId string) ([]*ReceiveInd
 	if err != nil {
 		return nil, err
 	}
-
+	log.Println("will get id after ", id)
 	rows, err := stmt.Query(id, folderId)
 	if err != nil {
 		return nil, err
@@ -330,10 +330,7 @@ func getReceiveUpdateAfter(tx *sql.Tx, id int64, folderId string) ([]*ReceiveInd
 			&seqs,
 			&timestamp)
 		if err != nil {
-			return nil, err
-		}
-
-		if err != nil {
+			_ = tx.Rollback()
 			return nil, err
 		}
 
@@ -344,7 +341,6 @@ func getReceiveUpdateAfter(tx *sql.Tx, id int64, folderId string) ([]*ReceiveInd
 			return nil, err
 		}
 
-		_ = tx.Commit()
 		update.timestamp = timestamp
 		update.remote = node.DeviceId(remote)
 		update.update = new(bep.IndexUpdate)
@@ -352,6 +348,7 @@ func getReceiveUpdateAfter(tx *sql.Tx, id int64, folderId string) ([]*ReceiveInd
 		update.update.Files = infos
 		updates = append(updates, update)
 	}
+	_ = tx.Commit()
 
 	return updates, nil
 }

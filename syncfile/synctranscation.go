@@ -253,6 +253,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			folder.lock.Lock()
 			defer folder.lock.Unlock()
 			if last > 0 {
+				log.Println("last is ", last)
 				folder.lastUpdate = last
 			}
 		}()

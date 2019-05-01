@@ -290,6 +290,7 @@ func (sm *SyncManager) EndSendUpdate() {
 /**
 sendUpdate 是单线程的行为,sendUpdate 仅仅只是读写sendUpdate表
 并且读取 received update ,在一个时刻　如果没有读取到就主观认为没有收到
+
 */
 func (sm *SyncManager) prepareSendUpdate() {
 	var err error
@@ -302,27 +303,38 @@ func (sm *SyncManager) prepareSendUpdate() {
 
 	devIds := sm.getConnectedDevice()
 
-	tx, err = sm.cacheDb.Begin()
-	if err != nil {
-		log.Printf("%s when preparet to send updates ",
-			err.Error())
-		return
-	}
-
 	for _, dev := range devIds {
+
+		tx, err = sm.cacheDb.Begin()
+		if err != nil {
+			log.Printf("%s when preparet to send updates ",
+				err.Error())
+			return
+		}
 		relations, err := GetRelationOfDevice(tx, dev)
 
 		if err != nil {
 			_ = tx.Rollback()
 			log.Printf(" %s when get relations of %s ",
 				err.Error(), dev.String())
+			_ = tx.Rollback()
 			return
 		}
+
+		_ = tx.Commit()
 		for _, relation := range relations {
 
 			if relation.PeerReadOnly {
 				continue
 			}
+
+			tx, err = sm.cacheDb.Begin()
+			if err != nil {
+				log.Printf("%s when preparet to send updates ",
+					err.Error())
+				return
+			}
+
 			sus, err := getSendUpdateToFolder(tx, dev, relation.Folder)
 			if err != nil {
 				log.Printf(" %s when get SendUpdates of %s ",
@@ -332,6 +344,7 @@ func (sm *SyncManager) prepareSendUpdate() {
 			}
 
 			_ = tx.Commit()
+
 			tagMap := make(map[int64]bool)
 			for _, su := range sus {
 				tagMap[su.UpdateId] = true
@@ -340,6 +353,7 @@ func (sm *SyncManager) prepareSendUpdate() {
 			if err != nil {
 				log.Printf(" %s whecd n get indexSeqs of %s ",
 					err.Error(), dev.String())
+				return
 
 			}
 			readySend := make([]*fs.IndexSeq, 0)
@@ -348,6 +362,7 @@ func (sm *SyncManager) prepareSendUpdate() {
 					readySend = append(readySend, indexSeq)
 				}
 			}
+
 			indexs, updates :=
 				sm.getUpdatesByIndexSeq(relation.Folder, readySend)
 			for id, index := range indexs {
