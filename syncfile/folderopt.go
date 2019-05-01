@@ -487,7 +487,7 @@ func (sm *SyncManager) updateRelation(relation *ShareRelation) error {
 			return err
 		}
 	} else {
-		_.err = updateRelation(tx, relation)
+		err = updateRelation(tx, relation)
 		if err != nil {
 			_ = tx.Rollback()
 			return err
