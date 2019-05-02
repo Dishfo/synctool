@@ -201,23 +201,35 @@ const (
 func parseForm(form url.Values) (map[string]interface{}, error) {
 	data := make(map[string]interface{})
 	var err error
-	data[idField] = form.Get("Id")
-	data[readOnlyField], err = strconv.ParseBool(form.Get("ReadOnly"))
-	if err != nil {
-		return nil, err
-	}
-	data[labelField] = form.Get("Label")
-	data[realField] = form.Get("Real")
-	deviceStr := form.Get("Devices")
-	devices := strings.Split(deviceStr, ",")
-	devs := make([]string, 0)
-	for _, device := range devices {
-		if device == "" {
-			continue
+
+	if _, ok := form["ReadOnly"]; ok {
+		data[readOnlyField], err = strconv.ParseBool(form.Get("ReadOnly"))
+		if err != nil {
+			return nil, err
 		}
-		devs = append(devs, device)
 	}
-	data[devicesField] = devs
+
+	if _, ok := form["Label"]; ok {
+		data[labelField] = form.Get("Label")
+	}
+
+	if _, ok := form["Real"]; ok {
+		data[realField] = form.Get("Real")
+	}
+
+	if _, ok := form["Devices"]; ok {
+		deviceStr := form.Get("Devices")
+		devices := strings.Split(deviceStr, ",")
+		devs := make([]string, 0)
+		for _, device := range devices {
+			if device == "" {
+				continue
+			}
+			devs = append(devs, device)
+		}
+		data[devicesField] = devs
+	}
+
 	return data, nil
 }
 

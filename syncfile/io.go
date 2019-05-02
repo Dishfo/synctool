@@ -37,6 +37,7 @@ func (sm *SyncManager) receiveMsg(msg node.WrappedMessage) {
 	case *bep.Index:
 		sm.handleIndex(msg.Remote, realmsg.(*bep.Index))
 	case *bep.ClusterConfig:
+		log.Println("receive config ", realmsg.(*bep.ClusterConfig))
 		onReceiveClusterConfig(msg.Remote, realmsg.(*bep.ClusterConfig))
 		sm.handleClusterConfig(msg.Remote, realmsg.(*bep.ClusterConfig))
 	case *bep.Request:
@@ -99,7 +100,6 @@ func (sm *SyncManager) handleUpdate(remote node.DeviceId,
 获取原来的关系表，
 构建新的关系表
 保证这个处理过程为线程安全
-
 */
 
 //todo 此处的事务需要是串行
@@ -107,8 +107,6 @@ func (sm *SyncManager) handleClusterConfig(remote node.DeviceId,
 	config *bep.ClusterConfig) {
 	//log.Printf("%s receied from %s ", config.String(),
 	//	remote.String())
-	sm.folderLock.Lock()
-	defer sm.folderLock.Unlock()
 
 	tx, err := sm.cacheDb.Begin()
 	if err != nil {
@@ -136,6 +134,8 @@ func (sm *SyncManager) handleClusterConfig(remote node.DeviceId,
 	if err != nil {
 		panic(err)
 	}
+	log.Println("calculate relations ", relations)
+
 	_ = tx.Commit()
 	sm.setNewRelation(oldRelations, relations)
 }
@@ -145,33 +145,35 @@ func (sm *SyncManager) setNewRelation(oldRelations, relations []*ShareRelation) 
 	toDelete := make([]int64, 0)
 	toAdd := make([]*ShareRelation, 0)
 
-	relationMap := make(map[string]bool)
-	newRelationMap := make(map[string]bool)
+	relationMap := make(map[string]*ShareRelation)
+	newRelationMap := make(map[string]*ShareRelation)
 	for _, r := range oldRelations {
-		relationMap[r.Folder] = true
+		relationMap[r.Folder] = r
 	}
 
 	for _, r := range relations {
-		newRelationMap[r.Folder] = true
-		if relationMap[r.Folder] {
+		newRelationMap[r.Folder] = r
+		if relationMap[r.Folder] == nil {
 			toAdd = append(toAdd, r)
 		}
 	}
 
 	for _, r := range oldRelations {
-		if !newRelationMap[r.Folder] {
+		if newRelationMap[r.Folder] == nil {
 			toDelete = append(toDelete, r.Id)
+		} else {
+			toAdd = append(toAdd, newRelationMap[r.Folder])
 		}
 	}
 
 	err := sm.addRelations(toAdd)
-	for err != sqlite3.ErrLocked {
+	for err == sqlite3.ErrLocked {
 		log.Println(err, " when insert relations")
 		err = sm.addRelations(toAdd)
 	}
 
 	err = sm.deleteRelations(toDelete)
-	for err != sqlite3.ErrLocked {
+	for err == sqlite3.ErrLocked {
 		log.Println(err, " when delete relations")
 		err = sm.deleteRelations(toDelete)
 	}
@@ -198,21 +200,18 @@ func (sm *SyncManager) deleteRelations(ids []int64) error {
 	return tx.Commit()
 }
 
+//内部调用的是update 操作防止出现重复的relations
 func (sm *SyncManager) addRelations(relations []*ShareRelation) error {
-	tx, err := sm.cacheDb.Begin()
-	if err != nil {
-		return err
-	}
-
+	var err error
 	for _, r := range relations {
-		_, err = storeRelation(tx, r)
+		log.Println("will insert relation ", r)
+		err = sm.updateRelation(r)
 		if err != nil {
-			_ = tx.Rollback()
 			return err
 		}
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 func (sm *SyncManager) GetRelationOfDevice(device node.DeviceId) ([]*ShareRelation, error) {

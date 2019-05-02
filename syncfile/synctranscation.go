@@ -243,11 +243,12 @@ func (sm *SyncManager) syncFolder(folderId string) {
 
 		defer sm.fsys.EnableCalculateUpdate(folderId)
 		defer endSyncTranscation(folder)
-		tFiles, last := sm.calculateNewestFolder(folder)
 
 		if folder.ReadOnly {
 			return
 		}
+
+		tFiles, last := sm.calculateNewestFolder(folder)
 
 		defer func() {
 			folder.lock.Lock()

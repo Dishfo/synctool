@@ -146,12 +146,12 @@ const (
 	`
 
 	deleteRelationByRemoteAndFolder = `
-	delete from ShareRelaton 
+	delete from ShareRelation 
 	where folder = ? and remote = ? 
 	`
 
 	updateRelationsql = `
-		update ShareRelaton 
+		update ShareRelation 
 	set peerreadonly = ? ,readonly = ?  
 	where remote = ? and folder = ?
 	`

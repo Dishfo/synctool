@@ -118,6 +118,8 @@ func updateRelation(tx *sql.Tx, r *ShareRelation) error {
 	if err != nil {
 		return err
 	}
+
+	return nil
 }
 
 func getRelationOfDevice(tx *sql.Tx,

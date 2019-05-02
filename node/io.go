@@ -19,11 +19,10 @@ const CompressThresHold = 1024 * 1024
 const MagicNumber int32 = 0x2EA7D90B
 
 var (
-	ErrInvaildMagic  = errors.New("Invaild magic number ")
-	ErrWrongDataSize = errors.New("Wrong data array size ")
-	ErrInvaildMsg    = errors.New("a invaild message")
-	ErrNotEough      = errors.New("has not receive enough data")
-	ErrShortSlice    = errors.New("use a short slice ")
+	ErrInvaildMagic = errors.New("Invaild magic number ")
+	ErrInvaildMsg   = errors.New("a invaild message")
+	ErrNotEough     = errors.New("has not receive enough data")
+	ErrShortSlice   = errors.New("use a short slice ")
 )
 
 func sendHello(s net.Stream, hello *bep.Hello) error {

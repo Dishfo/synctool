@@ -152,6 +152,7 @@ func (sm *SyncManager) EditFolder(opts map[string]interface{},
 		newShare.Copy(share)
 		for k, v := range opts {
 			rv := reflect.ValueOf(newShare)
+			rv = rv.Elem()
 			field := rv.FieldByName(k)
 			if !field.IsValid() {
 				sm.folderLock.Unlock()
@@ -236,6 +237,8 @@ func (sm *SyncManager) onEditFolder(folder *ShareFolder, older *FolderAttribute)
 	for _, s := range older.Devices {
 		if !newDevMap[s] {
 			toDel = append(toDel, s)
+		} else {
+			toAdd = append(toAdd, s)
 		}
 	}
 
@@ -456,7 +459,7 @@ func (sm *SyncManager) getUpdatesByIndexSeq(folderId string, indexSeqs []*fs.Ind
 //保证删除成功
 func (sm *SyncManager) DeleteRelations(folderId string, remote node.DeviceId) {
 	err := sm.deleteRelation(folderId, remote)
-	for err != sqlite3.ErrLocked {
+	for err == sqlite3.ErrLocked {
 		err = sm.deleteRelation(folderId, remote)
 	}
 	if err != nil {
@@ -466,7 +469,7 @@ func (sm *SyncManager) DeleteRelations(folderId string, remote node.DeviceId) {
 
 func (sm *SyncManager) UpdateRelation(relation *ShareRelation) {
 	err := sm.updateRelation(relation)
-	for err != sqlite3.ErrLocked {
+	for err == sqlite3.ErrLocked {
 		err = sm.updateRelation(relation)
 	}
 	if err != nil {
