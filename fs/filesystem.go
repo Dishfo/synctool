@@ -20,7 +20,7 @@ import (
 
 /**
 todo 把具体的计算存储任务分发给每一个folderNode
- 进而做到
+ 进而做到每一个folder 都可以并发
 */
 
 var (
@@ -33,8 +33,11 @@ var (
 	ErrWatcherWrong       = errors.New("wrong occur create watcher ")
 )
 
-func init() {
+var (
+	IgnoredHide = true
+)
 
+func init() {
 	dir, _ := os.Getwd()
 	infos, _ := ioutil.ReadDir(dir)
 	for _, info := range infos {
@@ -139,7 +142,6 @@ func (fs *FileSystem) initFolderIndex(folderId string) {
 
 //calculateIndex 计算出 folder 的初始index 把对应设置当 fnode 中
 //此时的index 可能并不一定是最新
-
 func (fs *FileSystem) calculateIndex(fn *FolderNode) {
 	if fn == nil {
 		return
@@ -226,10 +228,13 @@ outter:
 		case <-fn.stop:
 			return
 		case e, _ := <-events:
-			if fn.IsBlock(e.Name) {
+			relName, err := filepath.Rel(fn.realPath, e.Name)
+			if err != nil {
 				continue outter
 			}
-			log.Println(e)
+			if fn.IsBlock(relName) {
+				continue outter
+			}
 			var we WrappedEvent
 			we.Event = e
 			now := time.Now()
@@ -242,6 +247,11 @@ outter:
 
 //处理event ，或者计算update
 //todo 将处理event 与计算update 的任务分发给 fn
+/**
+在优化这个模块时 发现一个现象,有的文件出现了两个记录
+我推测这是由于文件被记录为 create write
+两个事件导致的
+*/
 func (fs *FileSystem) handleEvents(folder string) {
 	fs.lock.Lock()
 	fn, ok := fs.folders[folder]
@@ -255,7 +265,8 @@ func (fs *FileSystem) handleEvents(folder string) {
 	}
 
 	events := fn.events
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Second * 8)
+	ticker2 := time.NewTicker(time.Second * 45)
 	for {
 		select {
 		case <-fn.stop:
@@ -264,9 +275,9 @@ func (fs *FileSystem) handleEvents(folder string) {
 		case e, _ := <-events:
 			fn.handleEvent(e)
 		case <-ticker.C:
-			if fn.shouldCaculateUpadte() {
-				fn.calculateUpdate()
-			}
+			fn.calculateUpdate()
+		case <-ticker2.C:
+			fn.needScanner = true
 		}
 	}
 }
@@ -306,7 +317,7 @@ func (fs *FileSystem) GetIndexUpdateMap(folderId string, indexSeqs []*IndexSeq) 
 
 func (fs *FileSystem) SetIndexSeq(index *IndexSeq) error {
 	fs.lock.RLock()
-	if fn, ok := fs.folders[index.Folder]; !ok {
+	if fn, ok := fs.folders[index.Folder]; ok {
 		fs.lock.RUnlock()
 		return fn.setIndexSeq(index)
 	} else {
@@ -318,9 +329,9 @@ func (fs *FileSystem) SetIndexSeq(index *IndexSeq) error {
 //sync 逻辑中会干预记录操作
 func (fs *FileSystem) SetFileInfo(folderId string, info *bep.FileInfo) (int64, error) {
 	fs.lock.RLock()
-	if fn, ok := fs.folders[folderId]; !ok {
+	if fn, ok := fs.folders[folderId]; ok {
 		fs.lock.RUnlock()
-		return fn.internalStoreFileInfo(info)
+		return fn.setFile(info)
 	} else {
 		fs.lock.RUnlock()
 	}
@@ -344,7 +355,6 @@ var (
 
 /**
 GetData return data block
-
 */
 
 func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]byte, error) {
@@ -379,7 +389,7 @@ func (fs *FileSystem) DiscardEvents(folder, name string) {
 	if f, ok := fs.folders[folder]; ok {
 
 		fs.lock.RUnlock()
-		list := f.eventSet.lists[folder]
+		list := f.eventSet.lists[name]
 		if list != nil {
 			list.Clear()
 		}
@@ -437,4 +447,34 @@ func (fs *FileSystem) EnableCalculateUpdate(folder string) {
 		fs.lock.RUnlock()
 	}
 
+}
+
+//StartUpdateTransaction
+func (fs *FileSystem) StartUpdateTransaction(folder string) {
+	fn := fs.getFolderNode(folder)
+	if fn != nil {
+		fn.startUpdate()
+		fn.lock.Unlock()
+	}
+}
+
+//EndUpdateTransaction
+func (fs *FileSystem) EndUpdateTransaction(folder string) {
+	fn := fs.getFolderNode(folder)
+	if fn != nil {
+		fn.endUpdate()
+		fn.lock.Unlock()
+	}
+}
+
+func (fs *FileSystem) getFolderNode(folder string) *FolderNode {
+	fs.lock.RLock()
+	if f, ok := fs.folders[folder]; ok {
+		fs.lock.Unlock()
+		return f
+	} else {
+		fs.lock.RUnlock()
+	}
+
+	return nil
 }

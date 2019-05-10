@@ -6,10 +6,7 @@ import (
 	"log"
 	"syncfolders/bep"
 	"testing"
-
 )
-
-
 
 var (
 	bootStrapAddr = "/ip4/127.0.0.1/tcp/" +
@@ -43,6 +40,7 @@ func TestConnectionNode(t *testing.T) {
 		t.Log("succeed")
 		cn.Close()
 	}
+
 }
 
 func TestSliceCap(t *testing.T) {
@@ -132,7 +130,7 @@ func TestConnectionNode_ConnectDevice(t *testing.T) {
 	log.Println("has connected ")
 }
 
-func node1() (*ConnectionNode) {
+func node1() *ConnectionNode {
 	configs := make(map[string]string)
 	configs[TagBootStrap] = bootStrapAddr
 	configs[TagListen] = "/ip4/127.0.0.1/tcp/9001"
@@ -144,7 +142,7 @@ func node1() (*ConnectionNode) {
 	return node
 }
 
-func node2() (*ConnectionNode) {
+func node2() *ConnectionNode {
 	configs := make(map[string]string)
 	configs[TagBootStrap] = bootStrapAddr
 	configs[TagListen] = "/ip4/127.0.0.1/tcp/9002"
@@ -156,15 +154,12 @@ func node2() (*ConnectionNode) {
 	return node
 }
 
-
 func TestMemorySql(t *testing.T) {
-	db,err := sql.Open("sqlite3",":memory:")
-	if err!=nil {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
 		log.Fatalln(err)
 	}
 
-	_=db.Close()
+	_ = db.Close()
 
 }
-
-

@@ -158,7 +158,12 @@ func dupFile(dst, src string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return io.Copy(w, r)
+
+	n, err := io.Copy(w, r)
+	if err == nil {
+		_ = w.Sync()
+	}
+	return n, err
 }
 
 func deleteTarget(file string) {

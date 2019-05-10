@@ -17,7 +17,6 @@ import (
 具备节点之间的通信基础逻辑
 */
 
-
 //todo 提供返回节点地址的函数
 const (
 	TagListen    = "NodeListen"
@@ -39,12 +38,13 @@ type BaseNode struct {
 
 //NewNode return new node or error
 func NewNode(configs map[string]string) (*BaseNode, error) {
+
 	var err error
 	node := new(BaseNode)
-	node.id,err = NewUnqueId()
+	node.id, err = NewUnqueId()
 
-	if err!=nil{
-		return  nil,fmt.Errorf("%s on create id",err.Error())
+	if err != nil {
+		return nil, fmt.Errorf("%s on create id", err.Error())
 	}
 
 	listen, ok := configs[TagListen]
@@ -82,16 +82,17 @@ func NewNode(configs map[string]string) (*BaseNode, error) {
 	}
 
 	dhtPeer, err := dht.New(child, node.h)
-	if err!=nil {
-		return nil,err
+	if err != nil {
+		return nil, err
 	}
-	err = bootStrapDht(dhtPeer,node.h,bootmaddr,child)
-	if err!=nil {
-		return  nil,err
+	err = bootStrapDht(dhtPeer, node.h, bootmaddr, child)
+	if err != nil {
+		return nil, err
 	}
 
-	node.dhtPeer=dhtPeer
-	log.Printf(" %s has run \n",node.id.String())
+	node.dhtPeer = dhtPeer
+	log.Printf(" %s has run \n", node.id.String())
+
 	//set connection Manager
 	return node, nil
 }
@@ -102,18 +103,18 @@ func bootStrapDht(dhtPeer *dht.IpfsDHT,
 	ctx context.Context) error {
 
 	err := dhtPeer.Bootstrap(ctx)
-	if err!= nil {
+	if err != nil {
 		return err
 	}
 
-	peerInfo,err := peerstore.InfoFromP2pAddr(bootmaddr)
-	if err!=nil {
-		return  err
+	peerInfo, err := peerstore.InfoFromP2pAddr(bootmaddr)
+	if err != nil {
+		return err
 	}
 
-	err = h.Connect(ctx,*peerInfo)
-	if err!=nil {
-		return  err
+	err = h.Connect(ctx, *peerInfo)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -121,22 +122,18 @@ func bootStrapDht(dhtPeer *dht.IpfsDHT,
 
 func (n *BaseNode) Addr() []string {
 	addrs := n.h.Addrs()
-	addrstrs := make([]string,0)
-	for _,addr := range  addrs {
-		addrstrs= append(addrstrs, addr.String())
+	addrstrs := make([]string, 0)
+	for _, addr := range addrs {
+		addrstrs = append(addrstrs, addr.String())
 	}
 	return addrstrs
 }
-
 
 func (n *BaseNode) Close() {
 	n.cfun()
 }
 
-
 //Ids return deviceId of node and p2pId  of the node
-func (n *BaseNode) Ids()(string,string) {
-	return  n.id.String(),n.h.ID().Pretty()
+func (n *BaseNode) Ids() (string, string) {
+	return n.id.String(), n.h.ID().Pretty()
 }
-
-

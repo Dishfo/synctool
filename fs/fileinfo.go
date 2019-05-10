@@ -3,10 +3,13 @@ package fs
 import (
 	"crypto/md5"
 	"database/sql"
+	"github.com/pkg/errors"
+	"io"
 	"io/ioutil"
 	"math"
 	"os"
 	"syncfolders/bep"
+	"syncfolders/tools"
 	"synctool/util"
 )
 
@@ -60,10 +63,13 @@ func GenerateFileInfo(file string) (*bep.FileInfo, error) {
 
 func generateFileInforDir(file string) (*bep.FileInfo, error) {
 	info := new(bep.FileInfo)
-	fInfo, _ := os.Stat(file)
-	info.Permissions = uint32(fInfo.Mode().Perm())
+	finfo, _ := os.Stat(file)
+	info.Permissions = uint32(finfo.Mode().Perm())
 	info.Type = bep.FileInfoType_DIRECTORY
-
+	info.ModifiedS = finfo.ModTime().Unix()
+	info.ModifiedNs = int32(finfo.ModTime().UnixNano() - STons*info.ModifiedS)
+	info.Permissions = uint32(finfo.Mode().Perm())
+	info.ModifiedBy = uint64(LocalUser)
 	return info, nil
 }
 
@@ -81,6 +87,8 @@ func generateFileInforLink(file string) (*bep.FileInfo, error) {
 }
 
 func generateFileInfo(file string) (*bep.FileInfo, error) {
+
+	defer tools.MethodExecTime("normal file hash blocks ")()
 	info := new(bep.FileInfo)
 	finfo, _ := os.Stat(file)
 
@@ -91,7 +99,8 @@ func generateFileInfo(file string) (*bep.FileInfo, error) {
 	info.Permissions = uint32(finfo.Mode().Perm())
 	info.ModifiedBy = uint64(LocalUser)
 	info.Type = bep.FileInfoType_FILE
-	blocks, err := caculateBlocks(file, info.BlockSize)
+
+	blocks, err := calculateBlocks(file, info.BlockSize)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +109,8 @@ func generateFileInfo(file string) (*bep.FileInfo, error) {
 	return info, nil
 }
 
-func caculateBlocks(file string, bsize int32) ([]*bep.BlockInfo, error) {
+//todo 修改这个函数的实现 以提高程序的运行速度
+func calculateBlocks(file string, bsize int32) ([]*bep.BlockInfo, error) {
 	var (
 		offset   int64 = 0
 		filesize int64 = 0
@@ -131,6 +141,50 @@ func caculateBlocks(file string, bsize int32) ([]*bep.BlockInfo, error) {
 	}
 
 	return blocks, nil
+}
+
+//用于在文件较大时使用 ,大文件时使用效果很好
+func calculateBlocksBySeek(file string, bsize int32) ([]*bep.BlockInfo, error) {
+	var (
+		offset int64 = 0
+	)
+
+	if bsize <= 0 {
+		return nil, errors.New("invalid block size")
+	}
+
+	buffer := make([]byte, bsize)
+	blocks := make([]*bep.BlockInfo, 0, 5)
+	fPtr, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer fPtr.Close()
+	for {
+		n, err := fPtr.ReadAt(buffer, offset)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		b := new(bep.BlockInfo)
+		b.Size = int32(n)
+		b.Offset = offset
+		b.WeakHash = util.Adler(buffer[:n])
+		md5hash := md5.Sum(buffer[:n])
+		b.Hash = md5hash[:]
+		blocks = append(blocks, b)
+		offset += int64(n)
+	}
+
+	return blocks, nil
+}
+
+func calculateBlocksConcurrent(file string, bsize int32) ([]*bep.BlockInfo, error) {
+
+	return nil, nil
 }
 
 const (

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"syncfolders/node"
+	"syncfolders/tools"
 	"testing"
 	"time"
 )
@@ -36,44 +37,43 @@ func logAllList(es *EventSet) {
 
 func TestFs(t *testing.T) {
 	LocalUser, _ = node.NewUnqueId()
-	fs := new(FileSystem)
-	fs.folders = make(map[string]*FolderNode)
-	err := fs.AddFolder("default", "/home/dishfo/test2")
+	fs := NewFileSystem()
+	err := fs.AddFolder("default", "/home/dishfo/test2/dir1")
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	/*fn := fs.folders["default"]
 	go func() {
-		ticker := time.NewTicker(time.Second * 4)
-		var lastUpdate int64 = 1
-		for {
+		//	var lastUpdate int64 = 1
+		defer tools.MethodExecTime("mmapTime")()
+		tx,_ := fn.dw.GetTx()
+		for i := 0; i < 50000; i++ {
 
-			select {
-			case <-ticker.C:
-				indexSeqs := fs.GetIndexSeqAfter("default", lastUpdate)
-				updates := fs.GetUpdateAfter("default", lastUpdate)
-				for _, indexSeq := range indexSeqs {
-					lastUpdate = indexSeq.Id
-				}
 
-				for _, u := range updates {
-					for _, f := range u.Files {
-						if f.Deleted {
-							log.Printf("======%s is deleted ", f.Name)
-						} else {
-							log.Printf("======%s is edited ", f.Name)
-						}
-					}
-				}
+			bep.GetInfoById(tx,666)
 
-			}
 		}
-	}()
+		tx.Commit()
+	}()*/
 
 	select {}
 }
 
+//用于测试 生成fileinfo 的函数执行效率
 func TestFileInfo(t *testing.T) {
+	//files := getSubFiles("/home/dishfo/test2/dir1")
+	files := []string{
+		"/home/dishfo/mydata/os-images/archlinux-2018.11.01-x86_64.iso",
+		"/home/dishfo/mydata/os-images/Remix_OS_2_0_513.iso",
+		"/home/dishfo/mydata/os-images/manjaro-xfce-18.0.4-stable-x86_64.iso",
+		"/home/dishfo/mydata/os-images/elementaryos-5.0-stable.20181016.iso",
+	}
+	defer tools.MethodExecTime("all blcoks ")()
+	for _, f := range files {
+		finfo, _ := os.Stat(f)
+		bs := selectBlockSize(finfo.Size())
+		calculateBlocks(f, bs)
+	}
 
 }
 
@@ -104,6 +104,9 @@ func TestWordCount(t *testing.T) {
 		wordCount2(strs)
 	}
 
+}
+
+func TestMMap(t *testing.T) {
 }
 
 func wordCount1(ws []string) map[string]int {
@@ -165,4 +168,26 @@ func TestFileList(t *testing.T) {
 	//}
 	//
 	//log.Println(fn.fl.String())
+
+	log.Println(isHide("/sync/hode/.git"))
+	log.Println(isHide(".DWADAW"))
+	log.Println(isHide("/sync/false"))
+	log.Println(isHide("."))
+	cond := sync.NewCond(&sync.Mutex{})
+	cond.L.Lock()
+	go func() {
+		time.Sleep(time.Second * 4)
+		cond.Signal()
+	}()
+
+	cond.Wait()
+
+	log.Println("one")
+	go func() {
+		time.Sleep(time.Second * 4)
+		cond.Signal()
+	}()
+	cond.Wait()
+
+	log.Println("two")
 }

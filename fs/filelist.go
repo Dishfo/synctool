@@ -51,8 +51,8 @@ func newFileList(folder string) *fileList {
 
 	fl.folders[0] = newFolder(folder)
 	fl.indexs[folder] = 0
-
 	fl.indexGen += 1
+
 	return fl
 }
 
@@ -65,9 +65,15 @@ func newFolder(folder string) Folder {
 
 func (fl *fileList) getItems() []string {
 	items := make([]string, 0)
-	for k := range fl.indexs {
+
+	for k, v := range fl.indexs {
+		if v == 0 {
+			continue
+		}
+
 		items = append(items, k)
 	}
+
 	return items
 }
 

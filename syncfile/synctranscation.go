@@ -15,6 +15,7 @@ import (
 	"syncfolders/bep"
 	"syncfolders/fs"
 	"syncfolders/node"
+	"unicode/utf8"
 )
 
 /**
@@ -104,9 +105,11 @@ func (rs *requestSet) stop() {
 }
 
 func (rs *requestSet) present(resp *bep.Response) bool {
+
 	if rs.IsCompete() {
 		return false
 	}
+
 	if _, ok := rs.resps[int64(resp.Id)]; ok {
 		return false
 	}
@@ -162,6 +165,7 @@ func (rwm *requestWaitingManager) NewTransaction(rs *requestSet) chan int {
 	for _, reqId := range rs.reqIds {
 		rwm.reqIdMap[int64(reqId)] = id
 	}
+
 	rwm.reqSetMap[id] = rs
 	for k := range rs.devReqMap {
 		devId := k
@@ -181,6 +185,7 @@ func (rwm *requestWaitingManager) NewTransaction(rs *requestSet) chan int {
 			}
 		}()
 	}
+
 	if rs.expectNum == 0 {
 		close(rs.wait)
 	}
@@ -228,6 +233,9 @@ func (sm *SyncManager) prepareSync() {
 //todo
 //todo
 //todo (3个todo做标记 ^ __ ^)
+/**
+
+ */
 func (sm *SyncManager) syncFolder(folderId string) {
 	sm.folderLock.Lock()
 	if folder, ok := sm.folders[folderId]; !ok {
@@ -269,6 +277,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		wait := sm.rwm.NewTransaction(reqSet)
 		logStruct(reqSet.reqs)
 		logStruct(reqSet.expectNum)
+
 		go func() {
 			for i, req := range reqs {
 				remote := blockSet.DeviceIds[i]
@@ -292,13 +301,13 @@ func (sm *SyncManager) syncFolder(folderId string) {
 
 		sm.filterTargetFiles(tFiles, blockSet,
 			reqSet)
-
+		logStruct(tFiles.Folders)
 		infos := make([]int64, 0)
 		for _, tFolder := range tFiles.Folders {
 			sm.fsys.BlockFile(tFolder.Folder, tFolder.Name)
 			info := sm.doSyncFolder(tFolder)
 			if info != nil {
-				id, err := sm.fsys.SetFileInfo(folderId, info)
+				id, err := sm.fsys.SetFileInfo(tFolder.Folder, info)
 				if err != nil {
 					infos = append(infos, id)
 				}
@@ -311,11 +320,13 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.fsys.BlockFile(tFile.Folder, tFile.Name)
 			info := sm.doSyncFile(tFile, blockSet)
 			if info != nil {
-				id, err := sm.fsys.SetFileInfo(folderId, info)
+				id, err := sm.fsys.SetFileInfo(tFile.Folder, info)
+				log.Println(id, err)
 				if err == nil {
 					infos = append(infos, id)
+					sm.fsys.DiscardEvents(tFile.Folder, tFile.Name)
 				} else {
-					log.Printf("%s when store new fileinfo",
+					log.Printf("%s when store new fileinfo\n",
 						err.Error())
 				}
 			}
@@ -402,6 +413,7 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 	fileMap, localMap := calculateFileMap(receiveUpdates, localIndex,
 		localUpdate, fromMap)
 
+	delete(fileMap, ".")
 	for name, info := range fileMap {
 		log.Println(name, info)
 		if dev, ok := fromMap[name]; ok {
@@ -597,7 +609,7 @@ func (sm *SyncManager) createRequests(blockSet *BlockSet) []*bep.Request {
 func (sm *SyncManager) filterTargetFiles(tFiles *TargetFiles,
 	blockSet *BlockSet,
 	reqSet *requestSet) {
-
+	pretreatedTargetFiles(tFiles)
 	newFiles := make([]*TargetFile, 0)
 	for _, file := range tFiles.Files {
 		seqs := blockSet.fileBlockMap[file.Name]
@@ -639,7 +651,7 @@ func (sm *SyncManager) filterTargetFiles(tFiles *TargetFiles,
 		}
 	}
 	tFiles.Files = newFiles
-	pretreatedTargetFiles(tFiles)
+
 }
 
 type TargetFolders []*TargetFile
@@ -653,7 +665,8 @@ func (ts TargetFolders) Swap(i, j int) {
 }
 
 func (ts TargetFolders) Less(i, j int) bool {
-	return len(ts[i].Folder) < len(ts[j].Folder)
+	return utf8.RuneCountInString(ts[i].Name) <
+		utf8.RuneCountInString(ts[j].Name)
 }
 
 //对folder 进行排序 移除非法的link文件
@@ -782,6 +795,7 @@ func (sm *SyncManager) doSyncFile(tFile *TargetFile, blockSet *BlockSet) *bep.Fi
 		}
 
 		_, err = dupFile(filePath, tmpFile)
+
 		if err != nil {
 			log.Printf("%s when dup file \n", err.Error())
 			goto rollback

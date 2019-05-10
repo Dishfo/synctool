@@ -1,99 +1,28 @@
 package fs
 
 import (
+	"sort"
 	"sync"
 	"syncfolders/fswatcher"
 )
 
 /**
-添加id 字段用于描述event 先后顺序
-诉求:
-可以读写event
-可以获取没有处理的event
-(
- 	既可以按顺序获取所有的event
- 	也可以分别获取一个文件的所有事件
-)
+eventSet 用与暂时存储 文件上发生的事件
+程序定期得取出这些事件,保证每次处理后的事件都会被移除
+但是如果在处理中发生了错误,那么这些事件还会被保存下来.
+直到下一次处理完成,
+这个部分打乱了事件的先后顺序
+我们先面向处理的是
 
-提供标记位来表示上次处理的最后一个事件
+上诉问题已在程序中体现出来
+无法有效的顺利构建filelist
+*/
 
-ps:
-关于事件处理的逻辑,
-delete事件是及时处理
-rename与create 都不会纳入集合
-只会导致fileList的变化
-
-rename需要进行解析寻找失去的文件
-修正fileList内容
-并且会产生一个delete fileinfo ,表示这个文件不再可用
-todo 关于如何获取文件原名的方式 暂时没有稳定的方法
-对于这个源文件的事件都应该考虑丢弃，事件难以通过 fileinfo
-进行记录.将先前的事件移至新的文件名下,但是rename,rename
-事件不进行保存
-
-并继续往后遍历，直	到没有事件,
-有两种情况.
-
-1 delete,rename ,导致在原有文件不存在
-2 没有其他的修改
-
-如果没有对应的item 表示文件已经丢失
-如果有表示文件还存在
-构建对应的fileinfo
-
-尽量考虑使用内存进行存储,
-todo 为了防止使用过多的内存，一定要有移除行为
- 遍历单个文件的事件,期望可以从上次处理的事件后
- 全局的evnet 似乎没有意义
-
-type EventSet struct {
-	events map[string]int
-}
-
-handle Event {
-swicth e.OP {
-case write:
- events[e.Name] = write
-case delete:
- events[e.Name] = delete
- remove(fileList,e.Name)
- info := generateInfo(e.Name,delete)
- id := sotreInfo(info)
- rememberUpadte(id)
-case rename:
- f := findSourcee(e)
- events[f] = delete
- info := generateInfo(f,delete)
- id := sotreInfo(info)
- rememberUpadte(id)
- events[e.Name] = rename
-case create:
- events[e.Name] = create
-}
-}
-
-
-calculateUpdate {
-infoIds := make([]int64,0)
-for k,e := events {
-if e == delete {
-continue
-}else if e == rename {
-	info = generateInfo(k)
-	id := sotreInfo(info)
-	infoIds = appeand(infoIds,id )
-}else if e== wirte {
-	info = generateInfo(k)
-	id := sotreInfo(info)
-	infoIds = appeand(infoIds,id )
-}else if e == create  {
-	info = generateInfo(k)
-	id := sotreInfo(info)
-	infoIds = appeand(infoIds,id )
-}
-
-uid := storeUpdate(infoIdss
-}
+/**
+暂时保留此处的锁
+ todo 修改内部的数据结构
+  同一文件的事件放置与同一队列里
+  事件的接收顺序将会标记队列的优先级
 
 */
 
@@ -199,12 +128,14 @@ func (el *EventList) Pre(e *Event) *Event {
 多个list集合
 */
 type EventSet struct {
-	lists map[string]*EventList
-	lock  sync.RWMutex
+	lists      map[string]*EventList
+	timeStamps map[string]int64
+	lock       sync.RWMutex
 }
 
 func NewEventSet() *EventSet {
 	es := new(EventSet)
+	es.timeStamps = make(map[string]int64)
 	es.lists = make(map[string]*EventList)
 	return es
 }
@@ -218,19 +149,47 @@ func (es *EventSet) NewEvent(e WrappedEvent) {
 		el.Name = e.Name
 	}
 	es.lists[e.Name] = el
+	es.timeStamps[e.Name] = e.ModNs
 	es.lock.Unlock()
 	el.NewEvent(e)
 }
 
 //关键的遍历函数
+//todo 对结果进行排序 将名字
 func (es *EventSet) AvailableList() []*EventList {
 	es.lock.Lock()
 	defer es.lock.Unlock()
 	lists := make([]*EventList, 0)
+
 	for _, l := range es.lists {
 		if l.Front() != nil {
 			lists = append(lists, l)
 		}
 	}
+
+	sort.Sort(eList{
+		timeStamps: es.timeStamps,
+		lists:      lists,
+	})
+
 	return lists
+}
+
+type eList struct {
+	lists      []*EventList
+	timeStamps map[string]int64
+}
+
+func (e eList) Less(i, j int) bool {
+	nameI := e.lists[i].Name
+	nameJ := e.lists[j].Name
+	return e.timeStamps[nameI] < e.timeStamps[nameJ]
+}
+
+func (e eList) Len() int {
+	return len(e.lists)
+}
+
+func (e eList) Swap(i, j int) {
+	e.lists[i], e.lists[j] = e.lists[j], e.lists[i]
 }

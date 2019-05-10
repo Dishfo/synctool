@@ -16,6 +16,10 @@ var (
 	ErrNotAFolder = errors.New("It's not a folder")
 )
 
+var (
+	IgnoredHide = true
+)
+
 //用于观察一个文件夹 以及文件夹下的子文件和子文件夹
 type FolderWatcher struct {
 	ep      *fdPoller
@@ -47,8 +51,8 @@ func NewWatcher(folder string) (*FolderWatcher, error) {
 
 	w.paths = make(map[int]string)
 
-	w.events = make(chan Event, 5)
-	w.errors = make(chan error, 5)
+	w.events = make(chan Event, 1024*1024)
+	w.errors = make(chan error, 256)
 
 	w.done = make(chan int)
 	w.doneResp = make(chan int)
@@ -201,7 +205,12 @@ func (w *FolderWatcher) readEvents() {
 	}
 }
 
+//包装event 并放入　event 信道
 func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
+	if shouldIgnoreEvent(name) {
+		return
+	}
+
 	if mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO ||
 		mask&unix.IN_CREATE == unix.IN_CREATE {
 		if w.handleCreate(mask, name) != nil {
@@ -216,6 +225,7 @@ func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
 	}
 
 	e := newEvent(mask, name)
+
 	if e.Op != IGNORED {
 		select {
 		case w.events <- e:
@@ -272,6 +282,19 @@ func (w *FolderWatcher) handleCreate(mask uint32, name string) error {
 		}
 	}
 	return nil
+}
+
+func shouldIgnoreEvent(file string) bool {
+
+	if !IgnoredHide {
+		return false
+	}
+
+	name := filepath.Base(file)
+	if strings.HasPrefix(name, ".") {
+		return true
+	}
+	return false
 }
 
 func (w *FolderWatcher) addWatcher(folder string) error {

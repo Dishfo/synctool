@@ -1,25 +1,31 @@
 package fs
 
 import (
+	"database/sql"
 	"errors"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syncfolders/bep"
 	"syncfolders/fswatcher"
+	"syncfolders/tools"
 )
 
 var (
 	ErrInvalidFolder = errors.New("folder is invalid ")
 )
 
+const (
+	MaxEventQueue = 1024 * 1024
+)
+
 /**
 todo 每一个folderNode都会有一个
  单独的db实例
- 不再提供存储外部fileInfo 的接口
 */
 
 type FolderNode struct {
@@ -37,7 +43,10 @@ type FolderNode struct {
 
 	dw *dbWrapper
 
-	lock sync.RWMutex
+	lock       sync.RWMutex
+	updateFlag chan int
+
+	needScanner bool
 
 	events chan WrappedEvent
 	ava    chan int
@@ -53,9 +62,10 @@ func newFolderNode(folderId string, real string) *FolderNode {
 
 	fn.eventSet = NewEventSet()
 	fn.blockFiles = make(map[string]bool)
-	fn.events = make(chan WrappedEvent, 1024)
+	fn.events = make(chan WrappedEvent, MaxEventQueue)
 	fn.stop = make(chan int)
 	fn.ava = make(chan int)
+	fn.updateFlag = make(chan int, 1)
 	return fn
 }
 
@@ -116,7 +126,7 @@ func (fn *FolderNode) EnableUpdate() {
 	fn.disableUpdater = false
 }
 
-func (fn *FolderNode) shouldCaculateUpadte() bool {
+func (fn *FolderNode) shouldCalculateUpdate() bool {
 	fn.lock.RLock()
 	defer fn.lock.RUnlock()
 	return !fn.disableUpdater
@@ -134,7 +144,13 @@ func (fn *FolderNode) calculateIndex() {
 			},
 		},
 	}
+
+	defer tools.MethodExecTime("calculateIndex ")()
 	for _, name := range files {
+		if isHide(name) {
+			continue
+		}
+
 		info, err := GenerateFileInfo(name)
 		if err != nil {
 			log.Println(err)
@@ -143,16 +159,28 @@ func (fn *FolderNode) calculateIndex() {
 		info.Version = version
 		info.ModifiedBy = uint64(LocalUser)
 		info.Name, _ = filepath.Rel(fn.realPath, name)
+		if info.Name == "." {
+			log.Println(name)
+		}
 		fileInfos = append(fileInfos, info)
 	}
 
 	index.Folder = fn.folderId
 	index.Files = fileInfos
 
+	defer tools.MethodExecTime("store index  ")()
 	err := fn.internalStoreIndex(index)
 	for err != nil {
 		err = fn.internalStoreIndex(index)
 	}
+}
+
+func isHide(file string) bool {
+	if !IgnoredHide {
+		return false
+	}
+	name := filepath.Base(file)
+	return strings.HasPrefix(name, ".")
 }
 
 func (fn *FolderNode) competeInit() {
@@ -172,6 +200,14 @@ func initFileList(fl *fileList, root string) error {
 		return err
 	}
 	for _, info := range infos {
+		if isHide(info.Name()) {
+			continue
+		}
+
+		if info.Name() == "." {
+			log.Println("在下才疏学浅")
+		}
+
 		filePath := filepath.Join(root, info.Name())
 		if info.IsDir() {
 			fl.newFolder(filePath)
@@ -272,24 +308,55 @@ func (fn *FolderNode) calculateUpdate() {
 		return
 	}
 
+	if !fn.shouldCalculateUpdate() {
+		return
+	}
+
+	if !fn.startUpdate() {
+		return
+	}
+
+	defer fn.endUpdate()
+
+	if fn.needScanner {
+		fn.scanFolderTransaction()
+		fn.needScanner = false
+	} else {
+		fn.fileEventTransaction()
+	}
+}
+
+func (fn *FolderNode) fileEventTransaction() {
+
 	lists := fn.eventSet.AvailableList()
 	indexSeq := new(IndexSeq)
 	indexSeq.Folder = fn.folderId
 	indexSeq.Seq = make([]int64, 0)
+	tx, err := fn.dw.GetTx()
+	if err != nil {
+		return
+	}
 
+	defer tools.MethodExecTime("file event udapte ")()
 	for _, l := range lists {
-		ids, err := newFileInfo(fn, l)
+		ids, err := newFileInfo(fn, l, tx)
 		if err == errDbWrong {
 			log.Printf("can't store fileinfo")
+			_ = tx.Rollback()
 			return
 		} else if err == errNoNeedInfo {
 			continue
+		} else if err != nil {
+			log.Panic(err, " unkonw how to process ")
 		}
 		indexSeq.Seq = append(indexSeq.Seq, ids...)
 	}
 
-	_, err := fn.internalStoreIndexSeq(indexSeq)
+	_ = tx.Commit()
+	defer tools.MethodExecTime("store update seq ")()
+	_, err = fn.internalStoreIndexSeq(indexSeq)
 	for err != nil {
+		log.Panic(err, " unkonw how to process ")
 		_, err = fn.internalStoreIndexSeq(indexSeq)
 	}
 }
@@ -324,10 +391,28 @@ type fileState struct {
 	state   int16
 }
 
+//用于外部模块设置
+func (fn *FolderNode) setFile(info *bep.FileInfo) (int64, error) {
+	filele := fn.fl.findFile(info.Name)
+	filePath := filepath.Join(fn.realPath, info.Name)
+	if filele == nil && !info.Deleted {
+		switch info.Type {
+		case bep.FileInfoType_DIRECTORY:
+			fn.fl.newFolder(filePath)
+		default:
+			fn.fl.newFile(filePath)
+		}
+	} else if info.Deleted {
+		fn.fl.removeItem(filePath)
+	}
+	return fn.internalStoreFileInfo(info)
+}
+
 //处理文件夹的 move 问题
+//类似mkdir -p 对创建的文件夹 不会产生对于子文件夹的监视
 func newFileInfo(
 	fn *FolderNode,
-	l *EventList) ([]int64, error) {
+	l *EventList, tx *sql.Tx) ([]int64, error) {
 
 	var hasMove bool
 	var hasMoveTo bool
@@ -335,7 +420,7 @@ func newFileInfo(
 	baseState := fileState{}
 	infoIds := make([]int64, 0)
 	event := l.Front()
-	olde := event
+	laste := event
 	folderId := fn.folderId
 	name, _ := filepath.Rel(fn.realPath, event.Name)
 	filele := fn.fl.findFile(event.Name)
@@ -347,7 +432,7 @@ func newFileInfo(
 	initState(event.WrappedEvent, &baseState)
 
 	for ; event != nil; event = l.Next(event) {
-		olde = event
+		laste = event
 		if filele != nil &&
 			filele.fileType == typeFolder &&
 			event.Op == fswatcher.MOVE &&
@@ -361,8 +446,10 @@ func newFileInfo(
 
 		processEvent(event.WrappedEvent, &baseState)
 	}
+	//从测试来看时间都用于 存储 fileinfo
 
 	if baseState.isExist {
+
 		info, err := GenerateFileInfo(l.Name)
 		name, _ := filepath.Rel(fn.realPath, l.Name)
 		info.Name = name
@@ -372,7 +459,7 @@ func newFileInfo(
 		}
 
 		info.ModifiedBy = uint64(LocalUser)
-		id, err := fn.internalStoreFileInfo(info)
+		id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 		if err != nil {
 			return infoIds, err
 		}
@@ -386,7 +473,8 @@ func newFileInfo(
 							fn.nextCounter(),
 						},
 					}
-					id, err := fn.internalStoreFileInfo(info)
+					info.Name, _ = filepath.Rel(fn.realPath, info.Name)
+					id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 					if err != nil {
 						return infoIds, err
 					}
@@ -403,16 +491,17 @@ func newFileInfo(
 
 		if baseState.target == newFile &&
 			filele == nil {
+
 			fn.onFileCreate(info)
 		}
 
 	} else {
 		if filele != nil {
-			info, err := fn.generateDelFileInfo(folderId, name, olde.WrappedEvent)
+			info, err := fn.generateDelFileInfo(folderId, name, laste.WrappedEvent)
 			if err != nil {
 				return infoIds, err
 			}
-			id, err := fn.internalStoreFileInfo(info)
+			id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 			if err != nil {
 				return infoIds, err
 			}
@@ -423,11 +512,11 @@ func newFileInfo(
 				for _, f := range files {
 					name, _ := filepath.Rel(fn.realPath, f)
 					info, err :=
-						fn.generateDelFileInfo(folderId, name, olde.WrappedEvent)
+						fn.generateDelFileInfo(folderId, name, laste.WrappedEvent)
 					if err != nil {
 						return infoIds, err
 					}
-					id, err := fn.internalStoreFileInfo(info)
+					id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 					if err != nil {
 						return infoIds, err
 					}
@@ -444,9 +533,17 @@ func newFileInfo(
 			infoIds = append(infoIds, id)
 		}
 	}
-	l.BackWard(olde)
+	l.BackWard(laste)
 
 	return infoIds, nil
+}
+
+/**
+用于测试使用以树型输出 程序认知中的文件夹子文件构成
+*/
+
+func (fn *FolderNode) fileTree() {
+
 }
 
 func initState(we WrappedEvent, state *fileState) {
@@ -483,9 +580,13 @@ func generateInfos(dir string) []*bep.FileInfo {
 		return infos
 	}
 	for _, f := range files {
+		if isHide(f.Name()) {
+			continue
+		}
+
 		filePath := filepath.Join(dir, f.Name())
 		info, err := GenerateFileInfo(filePath)
-		info.Name = f.Name()
+		info.Name = filePath
 		info.ModifiedBy = uint64(LocalUser)
 		if err != nil {
 			continue
@@ -793,12 +894,15 @@ func (fn *FolderNode) setIndexSeq(indexSeq *IndexSeq) error {
 }
 
 //文件操作回调函数==================================================
+var addCount = 0
 
 func (fn *FolderNode) onFileCreate(info *bep.FileInfo) {
 	filePath := filepath.Join(fn.realPath, info.Name)
+	addCount += 1
 	if info.Type == bep.FileInfoType_DIRECTORY {
 		fn.fl.newFolder(filePath)
 	} else {
+
 		fn.fl.newFile(filePath)
 	}
 }
@@ -908,6 +1012,7 @@ func (fn *FolderNode) internalStoreIndex(index *bep.Index) error {
 }
 
 func (fn *FolderNode) internalStoreFileInfo(info *bep.FileInfo) (int64, error) {
+
 	tx, err := fn.dw.GetTx()
 	if err != nil {
 		return -1, err

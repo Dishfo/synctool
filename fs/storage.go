@@ -70,7 +70,10 @@ func newDb(dbFile string) (*dbWrapper, error) {
 	log.Println("init sqlite DataBase ")
 	dw.db = db
 	dw.dbFile = dbFile
-
+	_, err = dw.db.Exec("PRAGMA mmap_size=268435456")
+	if err != nil {
+		return nil, err
+	}
 	return dw, nil
 }
 
