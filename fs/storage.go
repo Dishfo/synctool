@@ -74,6 +74,12 @@ func newDb(dbFile string) (*dbWrapper, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	_, err = dw.db.Exec("PRAGMA cache_size=268435456")
+	if err != nil {
+		return nil, err
+	}
+
 	return dw, nil
 }
 

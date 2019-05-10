@@ -41,7 +41,7 @@ const (
 	`
 
 	selectInfo = `
-	select ` + fileInfoTableField + ` from FileInfo where folder = ? and Name = ? 
+	select ` + fileInfoTableField + ` from FileInfo where Name = ? and folder = ?  
 	order by id desc 
 	limit 1`
 
@@ -83,7 +83,13 @@ func CreateFileInfoTable(db *sql.DB) (sql.Result, error) {
 }
 
 func GetRecentInfo(tx *sql.Tx, folder, name string) (*FileInfo, error) {
-	res, err := tx.Query(selectInfo, folder, name)
+
+	stmt, err := tx.Prepare(selectInfo)
+	if err != nil {
+		log.Printf("%s when select recent fileinfo ", err.Error())
+		return nil, err
+	}
+	res, err := stmt.Query(name, folder)
 	if err != nil {
 		log.Printf("%s when select recent fileinfo ", err.Error())
 		return nil, err

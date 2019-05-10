@@ -9,7 +9,6 @@ import (
 	"math"
 	"os"
 	"syncfolders/bep"
-	"syncfolders/tools"
 	"synctool/util"
 )
 
@@ -88,7 +87,6 @@ func generateFileInforLink(file string) (*bep.FileInfo, error) {
 
 func generateFileInfo(file string) (*bep.FileInfo, error) {
 
-	defer tools.MethodExecTime("normal file hash blocks ")()
 	info := new(bep.FileInfo)
 	finfo, _ := os.Stat(file)
 
@@ -100,7 +98,7 @@ func generateFileInfo(file string) (*bep.FileInfo, error) {
 	info.ModifiedBy = uint64(LocalUser)
 	info.Type = bep.FileInfoType_FILE
 
-	blocks, err := calculateBlocks(file, info.BlockSize)
+	blocks, err := calculateBlocksBySeek(file, info.BlockSize)
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +141,10 @@ func calculateBlocks(file string, bsize int32) ([]*bep.BlockInfo, error) {
 	return blocks, nil
 }
 
+var (
+	buffer = make([]byte, 16*MB)
+)
+
 //用于在文件较大时使用 ,大文件时使用效果很好
 func calculateBlocksBySeek(file string, bsize int32) ([]*bep.BlockInfo, error) {
 	var (
@@ -153,7 +155,6 @@ func calculateBlocksBySeek(file string, bsize int32) ([]*bep.BlockInfo, error) {
 		return nil, errors.New("invalid block size")
 	}
 
-	buffer := make([]byte, bsize)
 	blocks := make([]*bep.BlockInfo, 0, 5)
 	fPtr, err := os.Open(file)
 	if err != nil {
@@ -161,7 +162,7 @@ func calculateBlocksBySeek(file string, bsize int32) ([]*bep.BlockInfo, error) {
 	}
 	defer fPtr.Close()
 	for {
-		n, err := fPtr.ReadAt(buffer, offset)
+		n, err := fPtr.ReadAt(buffer[:bsize], offset)
 		if err == io.EOF {
 			break
 		}
@@ -183,6 +184,7 @@ func calculateBlocksBySeek(file string, bsize int32) ([]*bep.BlockInfo, error) {
 }
 
 func calculateBlocksConcurrent(file string, bsize int32) ([]*bep.BlockInfo, error) {
+	//cpuN := runtime.NumCPU()
 
 	return nil, nil
 }

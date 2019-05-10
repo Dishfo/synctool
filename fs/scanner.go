@@ -3,7 +3,6 @@ package fs
 import (
 	"database/sql"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"syncfolders/bep"
@@ -63,8 +62,8 @@ func (fn *FolderNode) scanFolderTransaction() {
 			continue
 		}
 		create += 1
-		log.Println("scanner will create file info ",
-			file, " ", create)
+		/*	log.Println("scanner will create file info ",
+			file, " ", create)*/
 		info := fn.createFileinfo(file)
 		if info == nil {
 			continue
@@ -130,8 +129,12 @@ func (fn *FolderNode) createFileinfo(file string) *bep.FileInfo {
 	if err != nil {
 		return nil
 	}
-
-	err = fn.appeandFileInfo(info)
+	tx, err := fn.dw.GetTx()
+	if err != nil {
+		return nil
+	}
+	defer tx.Commit()
+	err = fn.appendFileInfo(tx, info)
 	if err != nil {
 		return nil
 	}

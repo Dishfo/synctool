@@ -61,18 +61,21 @@ func TestFs(t *testing.T) {
 
 //用于测试 生成fileinfo 的函数执行效率
 func TestFileInfo(t *testing.T) {
-	//files := getSubFiles("/home/dishfo/test2/dir1")
-	files := []string{
+	files := getSubFiles("/home/dishfo/test2/dir1")
+	/*	files := []string{
 		"/home/dishfo/mydata/os-images/archlinux-2018.11.01-x86_64.iso",
 		"/home/dishfo/mydata/os-images/Remix_OS_2_0_513.iso",
 		"/home/dishfo/mydata/os-images/manjaro-xfce-18.0.4-stable-x86_64.iso",
 		"/home/dishfo/mydata/os-images/elementaryos-5.0-stable.20181016.iso",
-	}
+	}*/
 	defer tools.MethodExecTime("all blcoks ")()
 	for _, f := range files {
 		finfo, _ := os.Stat(f)
 		bs := selectBlockSize(finfo.Size())
-		calculateBlocks(f, bs)
+		_, err := calculateBlocksBySeek(f, bs)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
 }

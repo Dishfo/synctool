@@ -447,18 +447,16 @@ func newFileInfo(
 		processEvent(event.WrappedEvent, &baseState)
 	}
 	//从测试来看时间都用于 存储 fileinfo
-
 	if baseState.isExist {
-
 		info, err := GenerateFileInfo(l.Name)
 		name, _ := filepath.Rel(fn.realPath, l.Name)
 		info.Name = name
-		err = fn.appeandFileInfo(info)
+		err = fn.appendFileInfo(tx, info)
 		if err != nil {
 			return nil, err
 		}
-
 		info.ModifiedBy = uint64(LocalUser)
+
 		id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 		if err != nil {
 			return infoIds, err
@@ -497,10 +495,15 @@ func newFileInfo(
 
 	} else {
 		if filele != nil {
-			info, err := fn.generateDelFileInfo(folderId, name, laste.WrappedEvent)
+			info, err := fn.generateDelFileInfo(folderId, name, laste.WrappedEvent, tx)
 			if err != nil {
 				return infoIds, err
 			}
+
+			if info == nil {
+				return infoIds, nil
+			}
+
 			id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 			if err != nil {
 				return infoIds, err
@@ -512,7 +515,7 @@ func newFileInfo(
 				for _, f := range files {
 					name, _ := filepath.Rel(fn.realPath, f)
 					info, err :=
-						fn.generateDelFileInfo(folderId, name, laste.WrappedEvent)
+						fn.generateDelFileInfo(folderId, name, laste.WrappedEvent, tx)
 					if err != nil {
 						return infoIds, err
 					}
@@ -524,7 +527,6 @@ func newFileInfo(
 					infos = append(infos, info)
 				}
 			}
-
 			for _, info := range infos {
 				fn.onFileMove(info)
 			}
@@ -533,8 +535,8 @@ func newFileInfo(
 			infoIds = append(infoIds, id)
 		}
 	}
-	l.BackWard(laste)
 
+	l.BackWard(laste)
 	return infoIds, nil
 }
 
@@ -629,13 +631,9 @@ func processEvent(we WrappedEvent, state *fileState) {
 /**
 todo 需要记录的文件最新　fileInfo ID 的功能 fileInfo
 */
-func (fn *FolderNode) generateDelFileInfo(folder, name string,
-	we WrappedEvent) (*bep.FileInfo, error) {
-	tx, err := fn.dw.GetTx()
-	if err != nil {
-		return nil, err
-	}
 
+func (fn *FolderNode) generateDelFileInfo(folder, name string,
+	we WrappedEvent, tx *sql.Tx) (*bep.FileInfo, error) {
 	recentInfo, err := bep.GetRecentInfo(tx, folder, name)
 	if err != nil {
 		return nil, err
@@ -643,26 +641,22 @@ func (fn *FolderNode) generateDelFileInfo(folder, name string,
 	if recentInfo == nil {
 		return nil, nil
 	}
-	_ = tx.Commit()
 	recentInfo.Deleted = true
 	recentInfo.Size = 0
-	recentInfo.Version.Counters = append(recentInfo.Version.Counters, fn.nextCounter())
+	recentInfo.Version.Counters = append(recentInfo.Version.Counters,
+		fn.nextCounter())
 	recentInfo.ModifiedS = we.Mods
 	recentInfo.ModifiedNs = int32(we.ModNs - STons*we.Mods)
 	return recentInfo, nil
 }
 
-func (fn *FolderNode) appeandFileInfo(info *bep.FileInfo) error {
-	tx, err := fn.dw.GetTx()
-	if err != nil {
-		return err
-	}
+func (fn *FolderNode) appendFileInfo(tx *sql.Tx, info *bep.FileInfo) error {
 
 	recentInfo, err := bep.GetRecentInfo(tx, fn.folderId, info.Name)
 	if err != nil {
 		return err
 	}
-	_ = tx.Commit()
+
 	if recentInfo != nil {
 		recentInfo.Version.Counters =
 			append(recentInfo.Version.Counters, fn.nextCounter())
