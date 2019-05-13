@@ -9,9 +9,8 @@ import (
 )
 
 var (
-	bootStrapAddr = "/ip4/127.0.0.1/tcp/" +
-		"8089/ipfs/QmbUJ9psXC4ZGxWBPa1c1jtW9kNqJEnXsZ71YdeMRgL3HV"
-	listenAddr = "/ip4/127.0.0.1/tcp/9000"
+	bootStrapAddr = "/ip4/47.101.59.194/tcp/8080/ipfs/Qmbmo5z8bDH9ByxyL6DbuJpeDeMNdRcHRqzitU3fewaTNm"
+	listenAddr    = "/ip4/127.0.0.1/tcp/9000"
 )
 
 func TestBaseNode_Init(t *testing.T) {

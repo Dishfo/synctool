@@ -90,6 +90,11 @@ type ConnectionNode struct {
 }
 
 //create a new node with connection and send function
+/**
+ config contain
+ NodeListen     /ip4/127.0.0.1/tcp/9000
+DiscoverServer   /ip4/47.101.59.194/tcp/8080/ipfs/Qmbmo5z8bDH9ByxyL6DbuJpeDeMNdRcHRqzitU3fewaTNm
+*/
 func NewConnectionNode(configs map[string]string) (*ConnectionNode, error) {
 	cn := new(ConnectionNode)
 	n, err := NewNode(configs)
@@ -321,6 +326,7 @@ func (cm *ConnectionNode) setStreamHandler() {
 		})
 
 		if contain {
+
 			cm.handkShake(stream, devId)
 		} else {
 			log.Printf("a unknow host %s \n", hostId)
@@ -330,9 +336,11 @@ func (cm *ConnectionNode) setStreamHandler() {
 	})
 }
 
+//在此处设置
 func (cm *ConnectionNode) handkShake(stream net.Stream, id DeviceId) {
 	cm.lock.Lock()
 	if _, ok := cm.connStates[id]; ok {
+		defer cm.lock.Unlock()
 		_ = stream.Close()
 		return
 	}
