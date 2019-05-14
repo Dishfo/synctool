@@ -140,6 +140,15 @@ func NewEventSet() *EventSet {
 	return es
 }
 
+func (es *EventSet) discardEventOfFile(file string) {
+	es.lock.Lock()
+	defer es.lock.Unlock()
+	el, ok := es.lists[file]
+	if ok {
+		el.Clear()
+	}
+}
+
 //
 func (es *EventSet) NewEvent(e WrappedEvent) {
 	es.lock.Lock()

@@ -4,12 +4,12 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"github.com/pkg/errors"
+	"hash/adler32"
 	"io"
 	"io/ioutil"
 	"math"
 	"os"
 	"syncfolders/bep"
-	"synctool/util"
 )
 
 /**
@@ -66,7 +66,7 @@ func generateFileInforDir(file string) (*bep.FileInfo, error) {
 	info.Permissions = uint32(finfo.Mode().Perm())
 	info.Type = bep.FileInfoType_DIRECTORY
 	info.ModifiedS = finfo.ModTime().Unix()
-	info.ModifiedNs = int32(finfo.ModTime().UnixNano() - STons*info.ModifiedS)
+	info.ModifiedNs = int32(finfo.ModTime().Nanosecond())
 	info.Permissions = uint32(finfo.Mode().Perm())
 	info.ModifiedBy = uint64(LocalUser)
 	return info, nil
@@ -76,6 +76,9 @@ func generateFileInforLink(file string) (*bep.FileInfo, error) {
 	info := new(bep.FileInfo)
 	finfo, _ := os.Stat(file)
 	info.Permissions = uint32(finfo.Mode().Perm())
+	info.ModifiedS = finfo.ModTime().Unix()
+	info.ModifiedNs = int32(finfo.ModTime().Nanosecond())
+
 	info.Type = bep.FileInfoType_SYMLINK
 	target, err := os.Readlink(file)
 	if err != nil {
@@ -93,7 +96,7 @@ func generateFileInfo(file string) (*bep.FileInfo, error) {
 	info.Size = finfo.Size()
 	info.BlockSize = selectBlockSize(info.Size)
 	info.ModifiedS = finfo.ModTime().Unix()
-	info.ModifiedNs = int32(finfo.ModTime().UnixNano() - 1000000000*info.ModifiedS)
+	info.ModifiedNs = int32(finfo.ModTime().Nanosecond())
 	info.Permissions = uint32(finfo.Mode().Perm())
 	info.ModifiedBy = uint64(LocalUser)
 	info.Type = bep.FileInfoType_FILE
@@ -132,7 +135,7 @@ func calculateBlocks(file string, bsize int32) ([]*bep.BlockInfo, error) {
 
 		b.Size = int32(bend)
 		b.Offset = offset
-		b.WeakHash = util.Adler(data[offset : offset+bend])
+		b.WeakHash = adler32.Checksum(data[offset : offset+bend])
 		md5hash := md5.Sum(data[offset : offset+bend])
 		b.Hash = md5hash[:]
 		blocks = append(blocks, b)
@@ -163,17 +166,26 @@ func calculateBlocksBySeek(file string, bsize int32) ([]*bep.BlockInfo, error) {
 	defer fPtr.Close()
 	for {
 		n, err := fPtr.ReadAt(buffer[:bsize], offset)
-		if err == io.EOF {
-			break
-		}
+		//if n==0&&err == io.EOF {
+		//	break
+		//}
+		//if err != nil {
+		//	return nil, err
+		//}
 		if err != nil {
-			return nil, err
+			if err != io.EOF {
+				return nil, err
+			} else {
+				if n == 0 {
+					break
+				}
+			}
 		}
 
 		b := new(bep.BlockInfo)
 		b.Size = int32(n)
 		b.Offset = offset
-		b.WeakHash = util.Adler(buffer[:n])
+		b.WeakHash = adler32.Checksum(buffer[:n])
 		md5hash := md5.Sum(buffer[:n])
 		b.Hash = md5hash[:]
 		blocks = append(blocks, b)

@@ -232,9 +232,12 @@ outter:
 			if err != nil {
 				continue outter
 			}
-			if fn.IsBlock(relName) {
-				continue outter
-			}
+			/*	if fn.IsBlock(relName) {
+					log.Println("discard a event of ",relName)
+					continue outter
+				}
+			*/
+			//log.Println(relName," of event pass ")
 			var we WrappedEvent
 			we.Event = e
 			now := time.Now()
@@ -247,10 +250,14 @@ outter:
 
 //处理event ，或者计算update
 //todo 将处理event 与计算update 的任务分发给 fn
+
 /**
 在优化这个模块时 发现一个现象,有的文件出现了两个记录
 我推测这是由于文件被记录为 create write
 两个事件导致的
+
+对于事件的缓存应该在单独的线程里,
+
 */
 func (fs *FileSystem) handleEvents(folder string) {
 	fs.lock.Lock()
@@ -265,6 +272,7 @@ func (fs *FileSystem) handleEvents(folder string) {
 	}
 
 	events := fn.events
+
 	ticker := time.NewTicker(time.Second * 8)
 	ticker2 := time.NewTicker(time.Second * 45)
 	for {
@@ -273,6 +281,13 @@ func (fs *FileSystem) handleEvents(folder string) {
 			ticker.Stop()
 			return
 		case e, _ := <-events:
+			/*relName, err := filepath.Rel(fn.realPath, e.Name)
+			if err != nil {
+				continue outter
+			}
+			if fn.IsBlock(relName) {
+				continue outter
+			}*/
 			fn.handleEvent(e)
 		case <-ticker.C:
 			fn.calculateUpdate()
@@ -327,7 +342,7 @@ func (fs *FileSystem) SetIndexSeq(index *IndexSeq) error {
 }
 
 //sync 逻辑中会干预记录操作
-func (fs *FileSystem) SetFileInfo(folderId string, info *bep.FileInfo) (int64, error) {
+/*func (fs *FileSystem) SetFileInfo(folderId string, info *bep.FileInfo) (int64, error) {
 	fs.lock.RLock()
 	if fn, ok := fs.folders[folderId]; ok {
 		fs.lock.RUnlock()
@@ -337,6 +352,9 @@ func (fs *FileSystem) SetFileInfo(folderId string, info *bep.FileInfo) (int64, e
 	}
 	return -1, nil
 }
+
+
+*/
 
 func (fs *FileSystem) getFolderIndexId(folderId string) int64 {
 	fs.lock.RLock()
@@ -366,11 +384,12 @@ func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]
 		}
 		realPath := f.realPath
 		filePath := filepath.Join(realPath, name)
-		log.Printf("get data of %s", filePath)
+		//log.Printf("get data of %s", filePath)
 		fPtr, err := os.Open(filePath)
 		if err != nil {
 			return nil, ErrNoSuchFile
 		}
+		defer fPtr.Close()
 		data := make([]byte, int(size))
 		n, err := fPtr.ReadAt(data, offset)
 		if err != nil || n != int(size) {
@@ -385,14 +404,11 @@ func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]
 
 //丢弃某一文件下的事件
 func (fs *FileSystem) DiscardEvents(folder, name string) {
-	fs.lock.RLock()
+	fs.lock.Lock()
 	if f, ok := fs.folders[folder]; ok {
-
-		fs.lock.RUnlock()
-		list := f.eventSet.lists[name]
-		if list != nil {
-			list.Clear()
-		}
+		fs.lock.Unlock()
+		filePath := filepath.Join(f.realPath, name)
+		f.eventSet.discardEventOfFile(filePath)
 	} else {
 		fs.lock.Unlock()
 	}
@@ -405,6 +421,16 @@ func (fs *FileSystem) getFilePath(folderId, name string) string {
 		return filepath.Join(folder.realPath, name)
 	} else {
 		return ""
+	}
+}
+
+func (fs *FileSystem) GetFolderProxy(folderId string) *FolderNodeProxy {
+	fs.lock.RLock()
+	defer fs.lock.RUnlock()
+	if folder, ok := fs.folders[folderId]; ok {
+		return folder.NewFoldeProxy()
+	} else {
+		return nil
 	}
 }
 
@@ -450,12 +476,12 @@ func (fs *FileSystem) EnableCalculateUpdate(folder string) {
 }
 
 //StartUpdateTransaction
-func (fs *FileSystem) StartUpdateTransaction(folder string) {
+func (fs *FileSystem) StartUpdateTransaction(folder string) bool {
 	fn := fs.getFolderNode(folder)
 	if fn != nil {
-		fn.startUpdate()
-		fn.lock.Unlock()
+		return fn.startUpdate()
 	}
+	return false
 }
 
 //EndUpdateTransaction
@@ -463,14 +489,13 @@ func (fs *FileSystem) EndUpdateTransaction(folder string) {
 	fn := fs.getFolderNode(folder)
 	if fn != nil {
 		fn.endUpdate()
-		fn.lock.Unlock()
 	}
 }
 
 func (fs *FileSystem) getFolderNode(folder string) *FolderNode {
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
-		fs.lock.Unlock()
+		fs.lock.RUnlock()
 		return f
 	} else {
 		fs.lock.RUnlock()

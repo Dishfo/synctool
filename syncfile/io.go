@@ -37,7 +37,7 @@ func (sm *SyncManager) receiveMsg(msg node.WrappedMessage) {
 	case *bep.Index:
 		sm.handleIndex(msg.Remote, realmsg.(*bep.Index))
 	case *bep.ClusterConfig:
-		log.Println("receive config ", realmsg.(*bep.ClusterConfig))
+		//log.Println("receive config ", realmsg.(*bep.ClusterConfig))
 		onReceiveClusterConfig(msg.Remote, realmsg.(*bep.ClusterConfig))
 		sm.handleClusterConfig(msg.Remote, realmsg.(*bep.ClusterConfig))
 	case *bep.Request:
@@ -83,7 +83,7 @@ func (sm *SyncManager) handleUpdate(remote node.DeviceId,
 		return
 	}
 	tx.Commit()
-
+	log.Println("this update contain ", len(update.Files))
 	err = sm.temporaryUpdate(remote, update)
 	for err != nil {
 		log.Printf("repeat for %s \n", err.Error())

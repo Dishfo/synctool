@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unsafe"
 )
 
@@ -34,6 +35,8 @@ type FolderWatcher struct {
 
 	done     chan int
 	doneResp chan int
+
+	blockMap sync.Map
 }
 
 const (
@@ -207,8 +210,13 @@ func (w *FolderWatcher) readEvents() {
 
 //包装event 并放入　event 信道
 func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
+	var discard = false
 	if shouldIgnoreEvent(name) {
 		return
+	}
+
+	if w.isBlock(name) {
+		discard = true
 	}
 
 	if mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO ||
@@ -222,6 +230,9 @@ func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
 		mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF {
 		delete(w.paths, int(wd))
 		delete(w.subDirs, name)
+	}
+	if discard {
+		return
 	}
 
 	e := newEvent(mask, name)
@@ -275,6 +286,7 @@ func (w *FolderWatcher) handleCreate(mask uint32, name string) error {
 	if err != nil {
 		return err
 	}
+
 	if info.IsDir() {
 		err = w.addWatcher(name)
 		if err != nil {
@@ -326,4 +338,17 @@ func (w *FolderWatcher) isClose() bool {
 	default:
 		return false
 	}
+}
+
+func (w *FolderWatcher) BlockEvent(file string) {
+	w.blockMap.Store(file, true)
+}
+
+func (w *FolderWatcher) UnBlockEvent(file string) {
+	w.blockMap.Delete(file)
+}
+
+func (w *FolderWatcher) isBlock(file string) bool {
+	_, ok := w.blockMap.Load(file)
+	return ok
 }

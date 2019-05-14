@@ -96,15 +96,13 @@ func (fn *FolderNode) nextCounter() *bep.Counter {
 }
 
 func (fn *FolderNode) shieldFile(name string) {
-	fn.lock.Lock()
-	defer fn.lock.Unlock()
-	fn.blockFiles[name] = true
+	filePath := filepath.Join(fn.realPath, name)
+	fn.w.BlockEvent(filePath)
 }
 
 func (fn *FolderNode) unblock(name string) {
-	fn.lock.Lock()
-	defer fn.lock.Unlock()
-	fn.blockFiles[name] = false
+	filePath := filepath.Join(fn.realPath, name)
+	fn.w.UnBlockEvent(filePath)
 }
 
 func (fn *FolderNode) IsBlock(name string) bool {
@@ -293,13 +291,12 @@ func (fn *FolderNode) handleEvent(e WrappedEvent) {
 	case fswatcher.MOVETO:
 		fn.eventSet.NewEvent(e)
 	}
+
 }
 
+//这个函数是否失败其实意义不大
 func (fn *FolderNode) setFileInvalid(name string) {
-	_, err := fn.internalSetInvalid(name)
-	for err != nil {
-		_, err = fn.internalSetInvalid(name)
-	}
+	_, _ = fn.internalSetInvalid(name)
 }
 
 //todo 解决moveTo 产生的隐秘create事件
@@ -318,6 +315,8 @@ func (fn *FolderNode) calculateUpdate() {
 
 	defer fn.endUpdate()
 
+	log.Println("in update")
+	defer tools.MethodExecTime("update file record")()
 	if fn.needScanner {
 		fn.scanFolderTransaction()
 		fn.needScanner = false
@@ -326,6 +325,7 @@ func (fn *FolderNode) calculateUpdate() {
 	}
 }
 
+//如何保证这个部分必定成功
 func (fn *FolderNode) fileEventTransaction() {
 
 	lists := fn.eventSet.AvailableList()
@@ -337,7 +337,6 @@ func (fn *FolderNode) fileEventTransaction() {
 		return
 	}
 
-	defer tools.MethodExecTime("file event udapte ")()
 	for _, l := range lists {
 		ids, err := newFileInfo(fn, l, tx)
 		if err == errDbWrong {
@@ -352,11 +351,9 @@ func (fn *FolderNode) fileEventTransaction() {
 		indexSeq.Seq = append(indexSeq.Seq, ids...)
 	}
 
-	_ = tx.Commit()
-	defer tools.MethodExecTime("store update seq ")()
+	err = tx.Commit()
 	_, err = fn.internalStoreIndexSeq(indexSeq)
 	for err != nil {
-		log.Panic(err, " unkonw how to process ")
 		_, err = fn.internalStoreIndexSeq(indexSeq)
 	}
 }
@@ -393,19 +390,24 @@ type fileState struct {
 
 //用于外部模块设置
 func (fn *FolderNode) setFile(info *bep.FileInfo) (int64, error) {
+	fn.beforePushFileinfo(info)
+	return fn.internalStoreFileInfo(info)
+}
+
+func (fn *FolderNode) beforePushFileinfo(info *bep.FileInfo) {
 	filele := fn.fl.findFile(info.Name)
 	filePath := filepath.Join(fn.realPath, info.Name)
 	if filele == nil && !info.Deleted {
 		switch info.Type {
 		case bep.FileInfoType_DIRECTORY:
 			fn.fl.newFolder(filePath)
+
 		default:
 			fn.fl.newFile(filePath)
 		}
 	} else if info.Deleted {
 		fn.fl.removeItem(filePath)
 	}
-	return fn.internalStoreFileInfo(info)
 }
 
 //处理文件夹的 move 问题
@@ -457,12 +459,12 @@ func newFileInfo(
 		}
 		info.ModifiedBy = uint64(LocalUser)
 
-		id, err := bep.StoreFileInfo(tx, fn.folderId, info)
-		if err != nil {
-			return infoIds, err
-		}
-
 		if hasMoveTo {
+			if laste.Op == fswatcher.MOVETO {
+				info.ModifiedS = laste.Mods
+				info.ModifiedNs = int32(laste.ModNs - STons*laste.Mods)
+			}
+
 			infos := generateInfos(l.Name)
 			if len(infos) != 0 {
 				for _, info := range infos {
@@ -483,6 +485,11 @@ func newFileInfo(
 			for _, info := range infos {
 				fn.onFileCreate(info)
 			}
+		}
+
+		id, err := bep.StoreFileInfo(tx, fn.folderId, info)
+		if err != nil {
+			return infoIds, err
 		}
 
 		infoIds = append(infoIds, id)

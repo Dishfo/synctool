@@ -183,7 +183,7 @@ func StoreFileInfo(tx *sql.Tx, folder string, info *FileInfo) (int64, error) {
 	)
 
 	if err != nil {
-		log.Printf("%s when insert a fileinfo %s %s ",
+		log.Printf("%s cp when insert a fileinfo %s %s ",
 			err.Error(), folder, info.Name)
 		return -1, err
 	}

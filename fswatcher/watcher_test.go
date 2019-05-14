@@ -75,5 +75,8 @@ func TestPoller(t *testing.T) {
 	}
 
 	log.Println(ep.wait())
+}
+
+func TestMapConcurrent(t *testing.T) {
 
 }

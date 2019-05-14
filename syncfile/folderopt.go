@@ -99,6 +99,7 @@ func (sm *SyncManager) AddFolder(opt *FolderOption) error {
 	sm.folderLock.Lock()
 
 	if _, ok := sm.folders[opt.Id]; ok {
+		sm.folderLock.Unlock()
 		return ErrRepeatFolderId
 	}
 
@@ -348,26 +349,28 @@ func (sm *SyncManager) EndSendUpdate() {
 /**
 sendUpdate 是单线程的行为,sendUpdate仅仅只是读写sendUpdate表
 并且读取 received update ,在一个时刻如果没有读取到就主观认为没有收到
-
 */
 func (sm *SyncManager) prepareSendUpdate() {
 	var err error
 	var tx *sql.Tx
 	if !sm.StartSendUpdate() {
+		log.Println("is in a update transacation")
 		return
 	}
 
 	defer sm.EndSendUpdate()
-
+	log.Println("prepare to send recent update ")
 	devIds := sm.getConnectedDevice()
 
 	for _, dev := range devIds {
+
 		tx, err = sm.cacheDb.Begin()
 		if err != nil {
 			log.Printf("%s when preparet to send updates ",
 				err.Error())
 			return
 		}
+
 		relations, err := getRelationOfDevice(tx, dev)
 		if err != nil {
 			_ = tx.Rollback()
@@ -376,6 +379,7 @@ func (sm *SyncManager) prepareSendUpdate() {
 			_ = tx.Rollback()
 			return
 		}
+
 		_ = tx.Commit()
 		for _, relation := range relations {
 			if relation.PeerReadOnly {
@@ -424,7 +428,7 @@ func (sm *SyncManager) prepareSendUpdate() {
 					index, relation.Folder, id)
 			}
 
-			logStruct(updates)
+			//logStruct(updates)
 			for id, update := range updates {
 				sm.sendUpdate(dev,
 					update, relation.Folder, id)

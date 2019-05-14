@@ -44,10 +44,12 @@ folderNode中的文件列表
 */
 
 //scanner 还应该负责对修改时间与更新记录的事件不匹配的文件负责
-
+/**
+todo 对于文件夹相关的事件丢失暂时无法解决
+*/
 func (fn *FolderNode) scanFolderTransaction() {
 	oldfiles := fn.fl.getItems()
-	files := getSubFiles(fn.realPath)
+	files := GetSubFiles(fn.realPath)
 	notExist := findNotExist(oldfiles, files)
 	infoIds := make([]int64, 0)
 	infos := make([]*bep.FileInfo, 0)
@@ -56,6 +58,7 @@ func (fn *FolderNode) scanFolderTransaction() {
 	if err != nil {
 		return
 	}
+
 	create := 1
 	for _, file := range notExist {
 		if isHide(file) {
@@ -227,7 +230,7 @@ func (fn *FolderNode) discardEvent(name string) {
 }
 
 //todo 出现了多次的类似函数 我总有一天要把他们整合起来
-func getSubFiles(folder string) []string {
+func GetSubFiles(folder string) []string {
 	files := make([]string, 0)
 	infos, err := ioutil.ReadDir(folder)
 	if err != nil {
@@ -241,7 +244,7 @@ func getSubFiles(folder string) []string {
 		filePath := filepath.Join(folder, info.Name())
 		files = append(files, filePath)
 		if info.IsDir() {
-			files = append(files, getSubFiles(filePath)...)
+			files = append(files, GetSubFiles(filePath)...)
 		}
 	}
 
@@ -252,6 +255,8 @@ func getSubFiles(folder string) []string {
 func (fn *FolderNode) startUpdate() bool {
 	select {
 	case fn.updateFlag <- 1:
+	default:
+		return false
 	}
 	return true
 }

@@ -152,13 +152,14 @@ func dupFile(dst, src string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer r.Close()
 	info, _ := r.Stat()
 	w, err := os.OpenFile(dst, os.O_RDWR|os.O_TRUNC|os.O_CREATE,
 		info.Mode())
 	if err != nil {
 		return 0, err
 	}
-
+	defer w.Close()
 	n, err := io.Copy(w, r)
 	if err == nil {
 		_ = w.Sync()

@@ -231,18 +231,22 @@ func (sm *SyncManager) prepareSync() {
 }
 
 //todo
-//todo
+//todo 再同步完每一个文件后都应该丢弃已有的事件
 //todo (3个todo做标记 ^ __ ^)
 /**
-
- */
+todo 文件同步的完成意味着已有变化的失效
+ 在完成同步前的事件都将失效
+推测在setFileInfo 上消耗了太多时间
+*/
 func (sm *SyncManager) syncFolder(folderId string) {
 	sm.folderLock.Lock()
 	if folder, ok := sm.folders[folderId]; !ok {
+		log.Println("folder is not exist")
 		sm.folderLock.Unlock()
 		return
 	} else {
 		if !startSyncTranscation(folder) {
+			log.Println("folder on update trans")
 			sm.folderLock.Unlock()
 			return
 		}
@@ -259,12 +263,12 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		tFiles, last := sm.calculateNewestFolder(folder)
 
 		defer func() {
-			folder.lock.Lock()
-			defer folder.lock.Unlock()
+
 			if last > 0 {
 				log.Println("last is ", last)
 				folder.lastUpdate = last
 			}
+
 		}()
 
 		if tFiles == nil {
@@ -275,8 +279,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		reqs := sm.createRequests(blockSet)
 		reqSet := newReqSet(reqs, blockSet.DeviceIds)
 		wait := sm.rwm.NewTransaction(reqSet)
-		logStruct(reqSet.reqs)
-		logStruct(reqSet.expectNum)
+		//logStruct(reqSet.reqs)
 
 		go func() {
 			for i, req := range reqs {
@@ -297,39 +300,43 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		case <-wait:
 		}
 		log.Println("resp present")
-		logStruct(reqSet.resps)
+		//logStruct(reqSet.resps)
+		//这里之后知道处理完成
+		if !sm.fsys.StartUpdateTransaction(folderId) {
+			last = -1
+			return
+		}
+		defer sm.fsys.EndUpdateTransaction(folderId)
+		proxy := sm.fsys.GetFolderProxy(folderId)
+
+		if proxy == nil {
+			last = -1
+			return
+		}
 
 		sm.filterTargetFiles(tFiles, blockSet,
 			reqSet)
-		logStruct(tFiles.Folders)
-		infos := make([]int64, 0)
+		//logStruct(tFiles.Files)
+
 		for _, tFolder := range tFiles.Folders {
 			sm.fsys.BlockFile(tFolder.Folder, tFolder.Name)
 			info := sm.doSyncFolder(tFolder)
 			if info != nil {
-				id, err := sm.fsys.SetFileInfo(tFolder.Folder, info)
-				if err != nil {
-					infos = append(infos, id)
-				}
+				proxy.StoreFileinfo(info)
 			}
+			sm.fsys.DiscardEvents(tFolder.Folder, tFolder.Name)
+			//	log.Println("now",time.Now().UnixNano())
 			sm.fsys.UnBlockFile(tFolder.Folder, tFolder.Name)
 		}
 
 		for _, tFile := range tFiles.Files {
-			logStruct(tFile)
+			//logStruct(tFile)
 			sm.fsys.BlockFile(tFile.Folder, tFile.Name)
 			info := sm.doSyncFile(tFile, blockSet)
 			if info != nil {
-				id, err := sm.fsys.SetFileInfo(tFile.Folder, info)
-				log.Println(id, err)
-				if err == nil {
-					infos = append(infos, id)
-					sm.fsys.DiscardEvents(tFile.Folder, tFile.Name)
-				} else {
-					log.Printf("%s when store new fileinfo\n",
-						err.Error())
-				}
+				proxy.StoreFileinfo(info)
 			}
+			sm.fsys.DiscardEvents(tFile.Folder, tFile.Name)
 			sm.fsys.UnBlockFile(tFile.Folder, tFile.Name)
 		}
 
@@ -337,22 +344,17 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			sm.fsys.BlockFile(tLink.Folder, folderId)
 			info := sm.doSyncLink(tLink)
 			if info != nil {
-				id, err := sm.fsys.SetFileInfo(tLink.Folder, info)
-				if err != nil {
-					infos = append(infos, id)
-				}
+				proxy.StoreFileinfo(info)
 			}
+			sm.fsys.DiscardEvents(tLink.Folder, tLink.Name)
 			sm.fsys.UnBlockFile(tLink.Folder, tLink.Name)
 		}
 
-		repeatCount := 15
-		err := sm.storeFileInfos(infos, folderId)
-		for ; err != nil && repeatCount > 0; repeatCount-- {
-			err = sm.storeFileInfos(infos, folderId)
-		}
+		err := proxy.TryCommit()
 
-		if repeatCount == 0 {
-			log.Printf("store index Seq failed")
+		for err != nil {
+			log.Println("when proxy commit ", err.Error())
+			err = proxy.TryCommit()
 		}
 	}
 }
@@ -415,7 +417,7 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 
 	delete(fileMap, ".")
 	for name, info := range fileMap {
-		log.Println(name, info)
+		//	log.Println(name, info)
 		if dev, ok := fromMap[name]; ok {
 			file := new(TargetFile)
 			file.Name = info.Name
@@ -435,7 +437,6 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 			}
 		}
 	}
-
 	return tf, last
 }
 
@@ -468,7 +469,7 @@ func calculateFileMap(receivedUpdates []*ReceiveIndexUpdate,
 
 	for _, u := range receivedUpdates {
 		for _, info := range u.update.Files {
-			log.Println("remote ", u.remote, info)
+			//log.Println("remote ", u.remote, info)
 			res := chooseOneInfo(fileMap[info.Name],
 				info)
 			log.Println(res)
@@ -493,13 +494,14 @@ func chooseOneInfo(local, remote *bep.FileInfo) int {
 }
 
 func isNewer(local, remote *bep.FileInfo) bool {
+
 	return (local.ModifiedS*fs.STons + int64(local.ModifiedNs)) <
 		(remote.ModifiedS*fs.STons + int64(remote.ModifiedNs))
 }
 
 func compareFilePart(local, remote *bep.FileInfo, dev node.DeviceId, folder string) []*FileBlock {
 	blockHashMap := make(map[string]*bep.BlockInfo)
-	if local != nil {
+	if local != nil && local.Deleted == false {
 		for _, b := range local.Blocks {
 			hashStr := base64.StdEncoding.EncodeToString(b.Hash)
 			blockHashMap[hashStr] = b
@@ -710,7 +712,6 @@ func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
 
 	permission := os.FileMode(tFolder.Dst.Permissions)
 	info, err := os.Stat(filePath)
-
 	if !os.IsNotExist(err) {
 		if info.IsDir() {
 			log.Printf("%s has exist ", filePath)
@@ -806,6 +807,7 @@ func (sm *SyncManager) doSyncFile(tFile *TargetFile, blockSet *BlockSet) *bep.Fi
 		}
 	}
 
+	_, _ = os.Stat(filePath)
 	return tFile.Dst
 
 rollback:
@@ -852,7 +854,6 @@ func (sm *SyncManager) doSyncLink(tLink *TargetFile) *bep.FileInfo {
 			_, _ = deleteLink(filePath, false)
 		}
 	}
-
 	return tLink.Dst
 
 rollback:

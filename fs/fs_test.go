@@ -42,6 +42,14 @@ func TestFs(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	go func() {
+		fs.StartUpdateTransaction("default")
+
+		log.Println("open transaction 1")
+		fs.StartUpdateTransaction("default")
+		log.Println("open transaction 2")
+	}()
 	/*fn := fs.folders["default"]
 	go func() {
 		//	var lastUpdate int64 = 1
@@ -61,7 +69,7 @@ func TestFs(t *testing.T) {
 
 //用于测试 生成fileinfo 的函数执行效率
 func TestFileInfo(t *testing.T) {
-	files := getSubFiles("/home/dishfo/test2/dir1")
+	files := GetSubFiles("/home/dishfo/test2/dir1")
 	/*	files := []string{
 		"/home/dishfo/mydata/os-images/archlinux-2018.11.01-x86_64.iso",
 		"/home/dishfo/mydata/os-images/Remix_OS_2_0_513.iso",
