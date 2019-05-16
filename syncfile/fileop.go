@@ -276,9 +276,22 @@ func createLink(filePath string, target string) error {
 	return os.Link(target, filePath)
 }
 
-func hasNewerFile(info os.FileInfo, fileInfo *bep.FileInfo) bool {
-	return info.ModTime().UnixNano() >
-		(fileInfo.ModifiedS*fs.STons + int64(fileInfo.ModifiedNs))
+//
+func (sm *SyncManager) hasNewerFile(folderId string, info os.FileInfo, fileInfo *bep.FileInfo,
+	localInfo *bep.FileInfo) bool {
+	if localInfo == nil {
+		return info.ModTime().UnixNano() >
+			(fileInfo.ModifiedS*fs.STons + int64(fileInfo.ModifiedNs))
+	}
+
+	c := fs.LastCounter(localInfo)
+	tt := sm.fsys.GetCounterTimeTag(folderId, c)
+	if tt == nil {
+		return info.ModTime().UnixNano() >
+			(fileInfo.ModifiedS*fs.STons + int64(fileInfo.ModifiedNs))
+	} else {
+		return info.ModTime().UnixNano() != tt.RealModTime
+	}
 }
 
 const (

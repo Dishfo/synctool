@@ -211,14 +211,10 @@ func GetFileInfoByName(tx *sql.Tx, folderId, name string) (*FileInfo, error) {
 	return nil, nil
 }
 
-func IsInvalid(tx *sql.Tx, folderId, name string) bool {
-	info, err := GetFileInfoByName(tx, folderId, name)
-	if err != nil || info == nil {
-		return false
-	} else {
-		return info.Invalid
-	}
-}
+//
+//func IsInvalid(tx *sql.Tx, folderId, name string) bool {
+//
+//}
 
 func GetFileInfos(tx *sql.Tx, ids []int64) ([]*FileInfo, error) {
 	fileInfos := make([]*FileInfo, 0)
@@ -226,6 +222,9 @@ func GetFileInfos(tx *sql.Tx, ids []int64) ([]*FileInfo, error) {
 		fileinfo, err := GetInfoById(tx, id)
 		if err != nil {
 			return nil, err
+		}
+		if fileinfo == nil {
+			continue
 		}
 		fileInfos = append(fileInfos, fileinfo)
 	}

@@ -19,6 +19,7 @@ import (
 
 func getIndex(tx *sql.Tx, indexSeq *IndexSeq) (*bep.Index, error) {
 	index := new(bep.Index)
+
 	infos, err := bep.GetFileInfos(tx, indexSeq.Seq)
 	if err != nil {
 		return nil, err
@@ -26,7 +27,9 @@ func getIndex(tx *sql.Tx, indexSeq *IndexSeq) (*bep.Index, error) {
 
 	index.Folder = indexSeq.Folder
 	index.Files = infos
-
+	if index.Files == nil {
+		index.Files = make([]*bep.FileInfo, 0)
+	}
 	return index, nil
 }
 

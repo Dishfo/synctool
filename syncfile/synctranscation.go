@@ -241,7 +241,7 @@ todo 文件同步的完成意味着已有变化的失效
 func (sm *SyncManager) syncFolder(folderId string) {
 	sm.folderLock.Lock()
 	if folder, ok := sm.folders[folderId]; !ok {
-		log.Println("folder is not exist")
+		//log.Println("folder is not exist")
 		sm.folderLock.Unlock()
 		return
 	} else {
@@ -300,8 +300,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		case <-wait:
 		}
 		log.Println("resp present")
-		//logStruct(reqSet.resps)
-		//这里之后知道处理完成
+
 		if !sm.fsys.StartUpdateTransaction(folderId) {
 			last = -1
 			return
@@ -316,38 +315,40 @@ func (sm *SyncManager) syncFolder(folderId string) {
 
 		sm.filterTargetFiles(tFiles, blockSet,
 			reqSet)
-		//logStruct(tFiles.Files)
 
 		for _, tFolder := range tFiles.Folders {
-			sm.fsys.BlockFile(tFolder.Folder, tFolder.Name)
-			info := sm.doSyncFolder(tFolder)
+			//sm.fsys.BlockFile(tFolder.Folder, tFolder.Name)
+			info := sm.doSyncFolder(tFolder,
+				tFiles.localInfo(tFolder.Name))
 			if info != nil {
 				proxy.StoreFileinfo(info)
+				fs.LastCounter(info)
 			}
 			sm.fsys.DiscardEvents(tFolder.Folder, tFolder.Name)
-			//	log.Println("now",time.Now().UnixNano())
-			sm.fsys.UnBlockFile(tFolder.Folder, tFolder.Name)
+			//	sm.fsys.UnBlockFile(tFolder.Folder, tFolder.Name)
 		}
 
 		for _, tFile := range tFiles.Files {
 			//logStruct(tFile)
-			sm.fsys.BlockFile(tFile.Folder, tFile.Name)
-			info := sm.doSyncFile(tFile, blockSet)
+			//	sm.fsys.BlockFile(tFile.Folder, tFile.Name)
+			info := sm.doSyncFile(tFile, blockSet,
+				tFiles.localInfo(tFile.Name))
 			if info != nil {
 				proxy.StoreFileinfo(info)
 			}
 			sm.fsys.DiscardEvents(tFile.Folder, tFile.Name)
-			sm.fsys.UnBlockFile(tFile.Folder, tFile.Name)
+			//	sm.fsys.UnBlockFile(tFile.Folder, tFile.Name)
 		}
 
 		for _, tLink := range tFiles.Links {
-			sm.fsys.BlockFile(tLink.Folder, folderId)
-			info := sm.doSyncLink(tLink)
+			//	sm.fsys.BlockFile(tLink.Folder, folderId)
+			info := sm.doSyncLink(tLink,
+				tFiles.localInfo(tLink.Name))
 			if info != nil {
 				proxy.StoreFileinfo(info)
 			}
 			sm.fsys.DiscardEvents(tLink.Folder, tLink.Name)
-			sm.fsys.UnBlockFile(tLink.Folder, tLink.Name)
+			//	sm.fsys.UnBlockFile(tLink.Folder, tLink.Name)
 		}
 
 		err := proxy.TryCommit()
@@ -390,12 +391,13 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 
 	receiveUpdates, err := getReceiveUpdateAfter(tx, folder.lastUpdate, folder.Id)
 	_ = tx.Commit()
+
 	if err != nil {
 		log.Printf("%s when prepare get received update of %s ",
 			err.Error(), folder.Id)
 		return nil, -1
 	}
-	log.Println("has receive ", len(receiveUpdates))
+
 	if len(receiveUpdates) == 0 {
 		return nil, -1
 	} else {
@@ -417,7 +419,6 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 
 	delete(fileMap, ".")
 	for name, info := range fileMap {
-		//	log.Println(name, info)
 		if dev, ok := fromMap[name]; ok {
 			file := new(TargetFile)
 			file.Name = info.Name
@@ -437,6 +438,8 @@ func (sm *SyncManager) calculateNewestFolder(folder *ShareFolder) (*TargetFiles,
 			}
 		}
 	}
+
+	tf.oldFiles = localMap
 	return tf, last
 }
 
@@ -456,6 +459,7 @@ func calculateFileMap(receivedUpdates []*ReceiveIndexUpdate,
 	localMap := make(map[string]*bep.FileInfo)
 
 	for _, info := range localIndex.Files {
+
 		fileMap[info.Name] = info
 		localMap[info.Name] = info
 	}
@@ -472,7 +476,7 @@ func calculateFileMap(receivedUpdates []*ReceiveIndexUpdate,
 			//log.Println("remote ", u.remote, info)
 			res := chooseOneInfo(fileMap[info.Name],
 				info)
-			log.Println(res)
+			//log.Println(res)
 			if res == 1 {
 				fileMap[info.Name] = info
 				fromMap[info.Name] = u.remote
@@ -700,7 +704,7 @@ func validData(hash, data []byte) bool {
 	return true
 }
 
-func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
+func (sm *SyncManager) doSyncFolder(tFolder *TargetFile, localInfo *bep.FileInfo) *bep.FileInfo {
 	var bak *fileBak
 	var err error
 	filePath, err := sm.GetRealPath(tFolder.Folder, tFolder.Name)
@@ -714,12 +718,12 @@ func (sm *SyncManager) doSyncFolder(tFolder *TargetFile) *bep.FileInfo {
 	info, err := os.Stat(filePath)
 	if !os.IsNotExist(err) {
 		if info.IsDir() {
-			log.Printf("%s has exist ", filePath)
+
 			needDelete = true
 			needCreate = false
 		}
 
-		if hasNewerFile(info, tFolder.Dst) {
+		if sm.hasNewerFile(tFolder.Folder, info, tFolder.Dst, localInfo) {
 			return nil
 		}
 
@@ -755,7 +759,8 @@ func IsLink(info os.FileInfo) bool {
 	return false
 }
 
-func (sm *SyncManager) doSyncFile(tFile *TargetFile, blockSet *BlockSet) *bep.FileInfo {
+func (sm *SyncManager) doSyncFile(tFile *TargetFile, blockSet *BlockSet,
+	localInfo *bep.FileInfo) *bep.FileInfo {
 	var bak *fileBak
 	var err error
 	var needDelete = false
@@ -768,7 +773,7 @@ func (sm *SyncManager) doSyncFile(tFile *TargetFile, blockSet *BlockSet) *bep.Fi
 	info, err := os.Stat(filePath)
 	if !os.IsNotExist(err) {
 		log.Println("exist ", info.Name())
-		if hasNewerFile(info, tFile.Dst) {
+		if sm.hasNewerFile(tFile.Folder, info, tFile.Dst, localInfo) {
 			log.Printf("local %s is newer ", tFile.Name)
 			return nil
 		}
@@ -815,7 +820,7 @@ rollback:
 	return nil
 }
 
-func (sm *SyncManager) doSyncLink(tLink *TargetFile) *bep.FileInfo {
+func (sm *SyncManager) doSyncLink(tLink *TargetFile, localInfo *bep.FileInfo) *bep.FileInfo {
 	var bak *fileBak
 	var err error
 	var needDelete = false
@@ -823,7 +828,7 @@ func (sm *SyncManager) doSyncLink(tLink *TargetFile) *bep.FileInfo {
 	target := tLink.Dst.SymlinkTarget
 	info, err := os.Stat(filePath)
 	if !os.IsNotExist(err) {
-		if hasNewerFile(info, tLink.Dst) {
+		if sm.hasNewerFile(tLink.Folder, info, tLink.Dst, localInfo) {
 			return nil
 		}
 

@@ -44,11 +44,11 @@ func TestFs(t *testing.T) {
 	}
 
 	go func() {
-		fs.StartUpdateTransaction("default")
+		/*fs.StartUpdateTransaction("default")
 
 		log.Println("open transaction 1")
 		fs.StartUpdateTransaction("default")
-		log.Println("open transaction 2")
+		log.Println("open transaction 2")*/
 	}()
 	/*fn := fs.folders["default"]
 	go func() {

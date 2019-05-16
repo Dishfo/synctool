@@ -214,10 +214,10 @@ func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
 	if shouldIgnoreEvent(name) {
 		return
 	}
-
-	if w.isBlock(name) {
+	//todo 考虑移除阻塞操作
+	/*	if w.isBlock(name) {
 		discard = true
-	}
+	}*/
 
 	if mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO ||
 		mask&unix.IN_CREATE == unix.IN_CREATE {
@@ -231,6 +231,7 @@ func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
 		delete(w.paths, int(wd))
 		delete(w.subDirs, name)
 	}
+
 	if discard {
 		return
 	}

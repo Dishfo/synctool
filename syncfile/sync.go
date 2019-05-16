@@ -14,10 +14,6 @@ import (
 	"time"
 )
 
-var (
-	reqIds = new(int64)
-)
-
 /**
 用于	描述同步后的文件内容
 */
@@ -39,9 +35,14 @@ type FileBlock struct {
 }
 
 type TargetFiles struct {
-	Folders []*TargetFile
-	Links   []*TargetFile
-	Files   []*TargetFile
+	Folders  []*TargetFile
+	Links    []*TargetFile
+	Files    []*TargetFile
+	oldFiles map[string]*bep.FileInfo
+}
+
+func (tf *TargetFiles) localInfo(file string) *bep.FileInfo {
+	return tf.oldFiles[file]
 }
 
 type SyncHandler interface {

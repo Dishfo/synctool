@@ -51,6 +51,8 @@ func (fn *FolderNode) scanFolderTransaction() {
 	oldfiles := fn.fl.getItems()
 	files := GetSubFiles(fn.realPath)
 	notExist := findNotExist(oldfiles, files)
+	vanished := findDisappear(oldfiles, files)
+
 	infoIds := make([]int64, 0)
 	infos := make([]*bep.FileInfo, 0)
 	//find not exist
@@ -61,12 +63,12 @@ func (fn *FolderNode) scanFolderTransaction() {
 
 	create := 1
 	for _, file := range notExist {
+
 		if isHide(file) {
 			continue
 		}
+
 		create += 1
-		/*	log.Println("scanner will create file info ",
-			file, " ", create)*/
 		info := fn.createFileinfo(file)
 		if info == nil {
 			continue
@@ -90,31 +92,13 @@ func (fn *FolderNode) scanFolderTransaction() {
 		fn.discardEvent(file)
 	}
 
-	/*outDates := fn.findNeedUpdateFiles(files,tx)
-
-	update := 1
-	for _, file := range outDates {
-		if isHide(file) {
+	for _, file := range vanished {
+		if fn.isInCounter(tx, file) {
 			continue
 		}
-		update += 1
-		log.Println("scanner will update file info ", file, " ", update)
-		info := fn.createFileinfo(file)
-		if info == nil {
-			continue
-		}
-
-		id, err := bep.StoreFileInfo(tx, fn.folderId,
-			info)
-		if err != nil {
-			_ = tx.Rollback()
-			return
-		}
-
-		infoIds = append(infoIds, id)
-		infos = append(infos, info)
-		fn.discardEvent(file)
-	}*/
+		//todo 是否应该生成删除记录
+		fn.fl.removeItem(file)
+	}
 
 	indexSeq := new(IndexSeq)
 	indexSeq.Folder = fn.folderId
@@ -137,13 +121,15 @@ func (fn *FolderNode) createFileinfo(file string) *bep.FileInfo {
 		return nil
 	}
 	defer tx.Commit()
-	err = fn.appendFileInfo(tx, info)
+	err, c := fn.appendFileInfo(tx, info)
 	if err != nil {
 		return nil
 	}
 	info.Name = name
 	info.ModifiedBy = uint64(LocalUser)
-
+	fn.counters.storeMap(c,
+		AllNsecond(info.ModifiedS, int64(info.ModifiedNs)),
+		AllNsecond(info.ModifiedS, int64(info.ModifiedNs)))
 	return info
 }
 
@@ -162,6 +148,21 @@ func findNotExist(oldfiles, files []string) []string {
 	}
 
 	return notExist
+}
+
+func findDisappear(oldfiles, files []string) []string {
+	newFilesMap := make(map[string]bool)
+	vanished := make([]string, 0)
+	for _, f := range files {
+		newFilesMap[f] = true
+	}
+
+	for _, f := range oldfiles {
+		if !newFilesMap[f] {
+			vanished = append(vanished, f)
+		}
+	}
+	return vanished
 }
 
 //findNeedUpdateFiles 用于寻找update 记录的修改时间，与文件实际修改时间不一致的文件

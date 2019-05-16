@@ -1,7 +1,8 @@
 package fs
 
 import (
-	"log"
+	"os"
+	"path/filepath"
 	"syncfolders/bep"
 )
 
@@ -15,6 +16,26 @@ func (fp *FolderNodeProxy) StoreFileinfo(info *bep.FileInfo) {
 	if info == nil {
 		return
 	}
+	var real int64
+	var record int64
+	c := LastCounter(info)
+
+	if info.Deleted {
+		record = AllNsecond(info.ModifiedS, int64(info.ModifiedNs))
+		real = record
+	} else {
+		filePath := filepath.Join(fp.fn.realPath,
+			info.Name)
+		record = AllNsecond(info.ModifiedS, int64(info.ModifiedNs))
+		fInfo, err := os.Stat(filePath)
+		if err == nil {
+			real = fInfo.ModTime().UnixNano()
+		} else {
+			c = nil
+		}
+	}
+
+	fp.fn.counters.storeMap(c, real, record)
 	fp.fn.beforePushFileinfo(info)
 	fp.fileInfos = append(fp.fileInfos, info)
 }
@@ -30,6 +51,7 @@ func (fp *FolderNodeProxy) TryCommit() error {
 	}
 
 	for _, info := range fp.fileInfos {
+
 		id, err := bep.StoreFileInfo(tx, fp.folderId, info)
 		if err != nil {
 			_ = tx.Rollback()
@@ -42,7 +64,7 @@ func (fp *FolderNodeProxy) TryCommit() error {
 		Folder: fp.folderId,
 		Seq:    infoIds,
 	}
-	log.Println(indexSeq.Seq)
+
 	_, err = storeIndexSeq(tx, indexSeq)
 	if err != nil {
 		_ = tx.Rollback()

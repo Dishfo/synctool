@@ -32,10 +32,9 @@ type FolderNode struct {
 	folderId string
 	realPath string
 
-	fl         *fileList
-	w          *fswatcher.FolderWatcher
-	versionSeq *uint64
-	indexSeq   int64
+	fl       *fileList
+	w        *fswatcher.FolderWatcher
+	indexSeq int64
 
 	eventSet       *EventSet
 	disableUpdater bool
@@ -51,6 +50,11 @@ type FolderNode struct {
 	events chan WrappedEvent
 	ava    chan int
 	stop   chan int //用于标记这个node已失效
+
+	fms *fileInfoMap
+
+	versionSeq *uint64
+	counters   *CounterMap
 }
 
 func newFolderNode(folderId string, real string) *FolderNode {
@@ -59,6 +63,7 @@ func newFolderNode(folderId string, real string) *FolderNode {
 	fn.realPath = filepath.Clean(real)
 	fn.versionSeq = new(uint64)
 	*fn.versionSeq = 0
+	fn.counters = new(CounterMap)
 
 	fn.eventSet = NewEventSet()
 	fn.blockFiles = make(map[string]bool)
@@ -66,6 +71,7 @@ func newFolderNode(folderId string, real string) *FolderNode {
 	fn.stop = make(chan int)
 	fn.ava = make(chan int)
 	fn.updateFlag = make(chan int, 1)
+	fn.fms = newFileInCache()
 	return fn
 }
 
@@ -134,14 +140,6 @@ func (fn *FolderNode) calculateIndex() {
 	files := fn.getFiles()
 	fileInfos := make([]*bep.FileInfo, 0)
 	index := new(bep.Index)
-	version := &bep.Vector{
-		Counters: []*bep.Counter{
-			{
-				Id:    uint64(LocalUser),
-				Value: atomic.AddUint64(fn.versionSeq, 1),
-			},
-		},
-	}
 
 	defer tools.MethodExecTime("calculateIndex ")()
 	for _, name := range files {
@@ -154,13 +152,22 @@ func (fn *FolderNode) calculateIndex() {
 			log.Println(err)
 			continue
 		}
+		c := fn.nextCounter()
+		version := &bep.Vector{
+			Counters: []*bep.Counter{
+				c,
+			},
+		}
+
 		info.Version = version
 		info.ModifiedBy = uint64(LocalUser)
 		info.Name, _ = filepath.Rel(fn.realPath, name)
-		if info.Name == "." {
-			log.Println(name)
-		}
+		i := AllNsecond(info.ModifiedS,
+			int64(info.ModifiedNs))
+		fn.counters.storeMap(c, i, i)
+		fn.cacheFileInfo(info)
 		fileInfos = append(fileInfos, info)
+
 	}
 
 	index.Folder = fn.folderId
@@ -291,12 +298,12 @@ func (fn *FolderNode) handleEvent(e WrappedEvent) {
 	case fswatcher.MOVETO:
 		fn.eventSet.NewEvent(e)
 	}
-
 }
 
 //这个函数是否失败其实意义不大
 func (fn *FolderNode) setFileInvalid(name string) {
-	_, _ = fn.internalSetInvalid(name)
+	//_, _ = fn.internalSetInvalid(name)
+	fn.fms.setInvalid(name)
 }
 
 //todo 解决moveTo 产生的隐秘create事件
@@ -416,8 +423,12 @@ func newFileInfo(
 	fn *FolderNode,
 	l *EventList, tx *sql.Tx) ([]int64, error) {
 
-	var hasMove bool
-	var hasMoveTo bool
+	//var hasMove bool
+	//var hasMoveTo bool
+	if fn.isInCounter(tx, l.Name) {
+		fn.discardEvent(l.Name)
+		return make([]int64, 0), nil
+	}
 
 	baseState := fileState{}
 	infoIds := make([]int64, 0)
@@ -439,69 +450,42 @@ func newFileInfo(
 			filele.fileType == typeFolder &&
 			event.Op == fswatcher.MOVE &&
 			baseState.target == oldFile {
-			hasMove = true
+			//hasMove = true
 		}
-
-		if event.Op == fswatcher.MOVETO {
-			hasMoveTo = true
-		}
-
 		processEvent(event.WrappedEvent, &baseState)
 	}
-	//从测试来看时间都用于 存储 fileinfo
+
 	if baseState.isExist {
 		info, err := GenerateFileInfo(l.Name)
 		name, _ := filepath.Rel(fn.realPath, l.Name)
 		info.Name = name
-		err = fn.appendFileInfo(tx, info)
+		err, c := fn.appendFileInfo(tx, info)
 		if err != nil {
 			return nil, err
 		}
+
 		info.ModifiedBy = uint64(LocalUser)
-
-		if hasMoveTo {
-			if laste.Op == fswatcher.MOVETO {
-				info.ModifiedS = laste.Mods
-				info.ModifiedNs = int32(laste.ModNs - STons*laste.Mods)
-			}
-
-			infos := generateInfos(l.Name)
-			if len(infos) != 0 {
-				for _, info := range infos {
-					info.Version = &bep.Vector{
-						Counters: []*bep.Counter{
-							fn.nextCounter(),
-						},
-					}
-					info.Name, _ = filepath.Rel(fn.realPath, info.Name)
-					id, err := bep.StoreFileInfo(tx, fn.folderId, info)
-					if err != nil {
-						return infoIds, err
-					}
-					infoIds = append(infoIds, id)
-				}
-			}
-
-			for _, info := range infos {
-				fn.onFileCreate(info)
-			}
-		}
-
+		i := AllNsecond(info.ModifiedS, int64(info.ModifiedNs))
+		fn.counters.storeMap(c, i, i)
 		id, err := bep.StoreFileInfo(tx, fn.folderId, info)
 		if err != nil {
 			return infoIds, err
 		}
 
+		fn.cacheFileInfo(info)
 		infoIds = append(infoIds, id)
 
 		if baseState.target == newFile &&
 			filele == nil {
-
 			fn.onFileCreate(info)
 		}
-
 	} else {
 		if filele != nil {
+			if fn.isRecordDelete(tx, l.Name, laste.WrappedEvent) {
+				fn.discardEvent(l.Name)
+				return make([]int64, 0), nil
+			}
+
 			info, err := fn.generateDelFileInfo(folderId, name, laste.WrappedEvent, tx)
 			if err != nil {
 				return infoIds, err
@@ -511,31 +495,14 @@ func newFileInfo(
 				return infoIds, nil
 			}
 
+			c := LastCounter(info)
+			i := AllNsecond(info.ModifiedS, int64(info.ModifiedNs))
+			fn.counters.storeMap(c, i, i)
 			id, err := bep.StoreFileInfo(tx, fn.folderId, info)
+			fn.cacheFileInfo(info)
+
 			if err != nil {
 				return infoIds, err
-			}
-
-			infos := make([]*bep.FileInfo, 0)
-			if hasMove {
-				files := fn.fl.getSubFiles(l.Name)
-				for _, f := range files {
-					name, _ := filepath.Rel(fn.realPath, f)
-					info, err :=
-						fn.generateDelFileInfo(folderId, name, laste.WrappedEvent, tx)
-					if err != nil {
-						return infoIds, err
-					}
-					id, err := bep.StoreFileInfo(tx, fn.folderId, info)
-					if err != nil {
-						return infoIds, err
-					}
-					infoIds = append(infoIds, id)
-					infos = append(infos, info)
-				}
-			}
-			for _, info := range infos {
-				fn.onFileMove(info)
 			}
 
 			fn.onFileDelete(info)
@@ -580,33 +547,6 @@ func initState(we WrappedEvent, state *fileState) {
 		state.target = oldFile
 		state.state = removeFile | moveOp
 	}
-}
-
-func generateInfos(dir string) []*bep.FileInfo {
-	infos := make([]*bep.FileInfo, 0)
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return infos
-	}
-	for _, f := range files {
-		if isHide(f.Name()) {
-			continue
-		}
-
-		filePath := filepath.Join(dir, f.Name())
-		info, err := GenerateFileInfo(filePath)
-		info.Name = filePath
-		info.ModifiedBy = uint64(LocalUser)
-		if err != nil {
-			continue
-		}
-		infos = append(infos, info)
-		if f.IsDir() {
-			infos = append(infos, generateInfos(filePath)...)
-		}
-	}
-
-	return infos
 }
 
 func processEvent(we WrappedEvent, state *fileState) {
@@ -657,26 +597,27 @@ func (fn *FolderNode) generateDelFileInfo(folder, name string,
 	return recentInfo, nil
 }
 
-func (fn *FolderNode) appendFileInfo(tx *sql.Tx, info *bep.FileInfo) error {
+func (fn *FolderNode) appendFileInfo(tx *sql.Tx, info *bep.FileInfo) (error, *bep.Counter) {
 
 	recentInfo, err := bep.GetRecentInfo(tx, fn.folderId, info.Name)
 	if err != nil {
-		return err
+		return err, nil
 	}
 
-	if recentInfo != nil {
+	c := fn.nextCounter()
+	if recentInfo != nil && !recentInfo.Deleted {
 		recentInfo.Version.Counters =
-			append(recentInfo.Version.Counters, fn.nextCounter())
+			append(recentInfo.Version.Counters, c)
 		info.Version = recentInfo.Version
 	} else {
 		info.Version = &bep.Vector{
 			Counters: []*bep.Counter{},
 		}
 		info.Version.Counters = append(info.Version.Counters,
-			fn.nextCounter())
+			c)
 	}
 
-	return nil
+	return nil, c
 }
 
 func (fn *FolderNode) getIndex() *bep.Index {
@@ -701,7 +642,7 @@ func (fn *FolderNode) getIndex() *bep.Index {
 		_ = tx.Rollback()
 		return nil
 	}
-
+	//log.Println("index seq is ",indexSeq)
 	if indexSeq == nil {
 		return nil
 	}
@@ -746,6 +687,9 @@ func (fn *FolderNode) getUpdateById(id int64) *bep.IndexUpdate {
 				_ = tx.Rollback()
 				return nil
 			}
+			if info == nil {
+				continue
+			}
 			update.Files = append(update.Files, info)
 		}
 	}
@@ -784,6 +728,9 @@ func (fn *FolderNode) getUpdatesAfter(id int64) []*bep.IndexUpdate {
 				_ = tx.Rollback()
 				return updates
 			}
+			if info == nil {
+				continue
+			}
 			update.Files = append(update.Files, info)
 		}
 		updates = append(updates, update)
@@ -794,12 +741,7 @@ func (fn *FolderNode) getUpdatesAfter(id int64) []*bep.IndexUpdate {
 }
 
 func (fn *FolderNode) isInvalid(name string) bool {
-	tx, err := fn.dw.GetTx()
-	if err != nil {
-		return false
-	}
-	defer tx.Commit()
-	return bep.IsInvalid(tx, fn.folderId, name)
+	return fn.fms.isInvalid(name)
 }
 
 func (fn *FolderNode) getIndexSeq(id int64) *IndexSeq {
@@ -1013,7 +955,6 @@ func (fn *FolderNode) internalStoreIndex(index *bep.Index) error {
 }
 
 func (fn *FolderNode) internalStoreFileInfo(info *bep.FileInfo) (int64, error) {
-
 	tx, err := fn.dw.GetTx()
 	if err != nil {
 		return -1, err
@@ -1027,4 +968,77 @@ func (fn *FolderNode) internalStoreFileInfo(info *bep.FileInfo) (int64, error) {
 
 	err = tx.Commit()
 	return id, err
+}
+
+//用于判断文件其实已处于一个版本记录
+//todo 待实现
+func (fn *FolderNode) isInCounter(tx *sql.Tx, name string) bool {
+	baseName, _ := filepath.Rel(fn.realPath, name)
+	info := fn.fms.getFileInfo(baseName)
+
+	if info == nil {
+		return false
+	}
+
+	c := LastCounter(info)
+	tt := fn.counters.getVectorTimes(c)
+
+	finfo, err := os.Stat(name)
+	if err != nil {
+
+		if info.Deleted {
+			return true
+		}
+
+		return false
+	}
+
+	if finfo.ModTime().UnixNano() == tt.RealModTime {
+		return true
+	}
+
+	if finfo.IsDir() && info.Type == bep.FileInfoType_DIRECTORY {
+		return true
+	}
+
+	return false
+}
+
+func (fn *FolderNode) isRecordDelete(tx *sql.Tx, name string,
+	we WrappedEvent) bool {
+	baseName, _ := filepath.Rel(fn.realPath, name)
+	info := fn.fms.getFileInfo(baseName)
+
+	if info == nil {
+		return false
+	}
+
+	if !info.Deleted {
+		return false
+	}
+
+	return true
+}
+
+func LastCounter(info *bep.FileInfo) *bep.Counter {
+	if info == nil {
+		return nil
+	}
+	if info.Version == nil {
+		return nil
+	}
+	l := len(info.Version.Counters)
+	if l == 0 {
+		return nil
+	} else {
+		return info.Version.Counters[l-1]
+	}
+}
+
+func AllNsecond(second, nsencod int64) int64 {
+	return second*STons + nsencod
+}
+
+func (fn *FolderNode) cacheFileInfo(info *bep.FileInfo) {
+	fn.fms.cacheFileInfo(info.Name, info)
 }

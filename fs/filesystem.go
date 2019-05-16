@@ -5,7 +5,6 @@ import (
 	"encoding/base32"
 	"errors"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 	"syncfolders/bep"
 	"syncfolders/fswatcher"
 	"syncfolders/node"
+	"syncfolders/tools"
 	"time"
 )
 
@@ -63,6 +63,7 @@ func NewFileSystem() *FileSystem {
 
 //AddFolder ....................
 func (fs *FileSystem) AddFolder(folderId string, real string) error {
+	defer tools.MethodExecTime("add a new folder ")()
 	fs.lock.Lock()
 	if _, ok := fs.folders[folderId]; ok {
 		fs.lock.Unlock()
@@ -222,16 +223,16 @@ func (fs *FileSystem) receiveEvent(folder string) {
 
 	events := fn.w.Events()
 
-outter:
+	//outter:
 	for {
 		select {
 		case <-fn.stop:
 			return
 		case e, _ := <-events:
-			relName, err := filepath.Rel(fn.realPath, e.Name)
-			if err != nil {
-				continue outter
-			}
+			//relName, err := filepath.Rel(fn.realPath, e.Name)
+			//if err != nil {
+			//	continue outter
+			//}
 			/*	if fn.IsBlock(relName) {
 					log.Println("discard a event of ",relName)
 					continue outter
@@ -375,6 +376,10 @@ var (
 GetData return data block
 */
 
+var (
+	filePtrLimit = make(chan int, 256)
+)
+
 func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]byte, error) {
 	fs.lock.RLock()
 	if f, ok := fs.folders[folder]; ok {
@@ -385,6 +390,11 @@ func (fs *FileSystem) GetData(folder, name string, offset int64, size int32) ([]
 		realPath := f.realPath
 		filePath := filepath.Join(realPath, name)
 		//log.Printf("get data of %s", filePath)
+		filePtrLimit <- 1
+		defer func() {
+			<-filePtrLimit
+		}()
+
 		fPtr, err := os.Open(filePath)
 		if err != nil {
 			return nil, ErrNoSuchFile
