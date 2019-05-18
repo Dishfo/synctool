@@ -3,6 +3,7 @@ package fs
 import (
 	"database/sql"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"syncfolders/bep"
@@ -60,27 +61,30 @@ func (fn *FolderNode) scanFolderTransaction() {
 	if err != nil {
 		return
 	}
-
-	create := 1
 	for _, file := range notExist {
 
 		if isHide(file) {
 			continue
 		}
-
-		create += 1
+		log.Printf("scanf %s", file)
 		info := fn.createFileinfo(file)
 		if info == nil {
 			continue
 		}
 
+		if info.Type == bep.FileInfoType_DIRECTORY &&
+			!fn.w.HasSubFolder(file) {
+			fn.w.AppendWatcher(file)
+		}
+
 		id, err := bep.StoreFileInfo(tx, fn.folderId,
 			info)
 		if err != nil {
+			log.Printf("%s when scanerr ", err.Error())
 			_ = tx.Rollback()
 			return
 		}
-
+		fn.cacheFileInfo(info)
 		if info.Type == bep.FileInfoType_DIRECTORY {
 			fn.fl.newFolder(file)
 		} else {
@@ -89,7 +93,7 @@ func (fn *FolderNode) scanFolderTransaction() {
 
 		infoIds = append(infoIds, id)
 		infos = append(infos, info)
-		fn.discardEvent(file)
+		//fn.discardEvent(file)
 	}
 
 	for _, file := range vanished {

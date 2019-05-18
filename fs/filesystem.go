@@ -229,7 +229,7 @@ func (fs *FileSystem) receiveEvent(folder string) {
 		case <-fn.stop:
 			return
 		case e, _ := <-events:
-			//relName, err := filepath.Rel(fn.realPath, e.Name)
+			//relName, _ := filepath.Rel(fn.realPath, e.Name)
 			//if err != nil {
 			//	continue outter
 			//}

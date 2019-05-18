@@ -36,7 +36,8 @@ type FolderWatcher struct {
 	done     chan int
 	doneResp chan int
 
-	blockMap sync.Map
+	lock  sync.RWMutex
+	subWd map[string]int
 }
 
 const (
@@ -56,6 +57,7 @@ func NewWatcher(folder string) (*FolderWatcher, error) {
 
 	w.events = make(chan Event, 1024*1024)
 	w.errors = make(chan error, 256)
+	w.subWd = make(map[string]int)
 
 	w.done = make(chan int)
 	w.doneResp = make(chan int)
@@ -85,6 +87,7 @@ func NewWatcher(folder string) (*FolderWatcher, error) {
 		w.subDirs[f] = f
 
 		err = w.addWatcher(f)
+
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +213,7 @@ func (w *FolderWatcher) readEvents() {
 
 //包装event 并放入　event 信道
 func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
-	var discard = false
+
 	if shouldIgnoreEvent(name) {
 		return
 	}
@@ -230,10 +233,7 @@ func (w *FolderWatcher) wrapEvent(mask uint32, name string, wd int32) {
 		mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF {
 		delete(w.paths, int(wd))
 		delete(w.subDirs, name)
-	}
-
-	if discard {
-		return
+		delete(w.subWd, name)
 	}
 
 	e := newEvent(mask, name)
@@ -310,15 +310,32 @@ func shouldIgnoreEvent(file string) bool {
 	return false
 }
 
+func (w *FolderWatcher) HasSubFolder(folder string) bool {
+	w.lock.RLock()
+	defer w.lock.RUnlock()
+	return w.subWd[folder] != 0
+}
+
+func (w *FolderWatcher) AppendWatcher(folder string) {
+	err := w.addWatcher(folder)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	log.Println("add ")
+}
+
 func (w *FolderWatcher) addWatcher(folder string) error {
 	if w.isClose() {
 		return nil
 	}
+	w.lock.Lock()
 	wd, err := unix.InotifyAddWatch(w.wd, folder, defaultMask)
 	if err != nil {
 		return err
 	}
+	w.subWd[folder] = wd
 	w.paths[wd] = folder
+	w.lock.Unlock()
 	return nil
 }
 
@@ -342,14 +359,14 @@ func (w *FolderWatcher) isClose() bool {
 }
 
 func (w *FolderWatcher) BlockEvent(file string) {
-	w.blockMap.Store(file, true)
+
 }
 
 func (w *FolderWatcher) UnBlockEvent(file string) {
-	w.blockMap.Delete(file)
+
 }
 
 func (w *FolderWatcher) isBlock(file string) bool {
-	_, ok := w.blockMap.Load(file)
-	return ok
+
+	return false
 }

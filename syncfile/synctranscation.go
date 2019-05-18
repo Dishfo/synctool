@@ -274,7 +274,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 		if tFiles == nil {
 			return
 		}
-
+		//	logStruct(tFiles)
 		blockSet := descBlockSet(tFiles)
 		reqs := sm.createRequests(blockSet)
 		reqSet := newReqSet(reqs, blockSet.DeviceIds)
@@ -321,7 +321,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			info := sm.doSyncFolder(tFolder,
 				tFiles.localInfo(tFolder.Name))
 			if info != nil {
-				proxy.StoreFileinfo(info)
+				proxy.StoreFileInfo(info)
 				fs.LastCounter(info)
 			}
 			sm.fsys.DiscardEvents(tFolder.Folder, tFolder.Name)
@@ -334,7 +334,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			info := sm.doSyncFile(tFile, blockSet,
 				tFiles.localInfo(tFile.Name))
 			if info != nil {
-				proxy.StoreFileinfo(info)
+				proxy.StoreFileInfo(info)
 			}
 			sm.fsys.DiscardEvents(tFile.Folder, tFile.Name)
 			//	sm.fsys.UnBlockFile(tFile.Folder, tFile.Name)
@@ -345,7 +345,7 @@ func (sm *SyncManager) syncFolder(folderId string) {
 			info := sm.doSyncLink(tLink,
 				tFiles.localInfo(tLink.Name))
 			if info != nil {
-				proxy.StoreFileinfo(info)
+				proxy.StoreFileInfo(info)
 			}
 			sm.fsys.DiscardEvents(tLink.Folder, tLink.Name)
 			//	sm.fsys.UnBlockFile(tLink.Folder, tLink.Name)
@@ -497,8 +497,8 @@ func chooseOneInfo(local, remote *bep.FileInfo) int {
 	return 0
 }
 
+//todo 居然没有counter 对比逻辑
 func isNewer(local, remote *bep.FileInfo) bool {
-
 	return (local.ModifiedS*fs.STons + int64(local.ModifiedNs)) <
 		(remote.ModifiedS*fs.STons + int64(remote.ModifiedNs))
 }

@@ -134,6 +134,15 @@ func (fl *fileList) removeItem(name string) {
 			delete(fl.indexs, name)
 			delete(fl.items, i)
 			delete(fl.folders, i)
+			f, ok := fl.folders[i]
+			if ok {
+				subs := f.items
+				for _, i := range subs {
+					if e, ok := fl.items[i]; ok {
+						fl.removeItem(e.name)
+					}
+				}
+			}
 		}
 	} else {
 		return

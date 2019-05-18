@@ -312,9 +312,9 @@ func (fn *FolderNode) calculateUpdate() {
 		return
 	}
 
-	if !fn.shouldCalculateUpdate() {
-		return
-	}
+	//if !fn.shouldCalculateUpdate() {
+	//	return
+	//}
 
 	if !fn.startUpdate() {
 		return
@@ -322,7 +322,7 @@ func (fn *FolderNode) calculateUpdate() {
 
 	defer fn.endUpdate()
 
-	log.Println("in update")
+	//log.Println("in update")
 	defer tools.MethodExecTime("update file record")()
 	if fn.needScanner {
 		fn.scanFolderTransaction()
@@ -426,6 +426,7 @@ func newFileInfo(
 	//var hasMove bool
 	//var hasMoveTo bool
 	if fn.isInCounter(tx, l.Name) {
+		//	log.Println(l.Name,"  ","is in counter ")
 		fn.discardEvent(l.Name)
 		return make([]int64, 0), nil
 	}
@@ -480,14 +481,17 @@ func newFileInfo(
 			fn.onFileCreate(info)
 		}
 	} else {
+		//log.Println(filele)
 		if filele != nil {
 			if fn.isRecordDelete(tx, l.Name, laste.WrappedEvent) {
 				fn.discardEvent(l.Name)
+				//	log.Println("record delete clear")
 				return make([]int64, 0), nil
 			}
 
 			info, err := fn.generateDelFileInfo(folderId, name, laste.WrappedEvent, tx)
 			if err != nil {
+
 				return infoIds, err
 			}
 
@@ -581,10 +585,7 @@ todo 需要记录的文件最新　fileInfo ID 的功能 fileInfo
 
 func (fn *FolderNode) generateDelFileInfo(folder, name string,
 	we WrappedEvent, tx *sql.Tx) (*bep.FileInfo, error) {
-	recentInfo, err := bep.GetRecentInfo(tx, folder, name)
-	if err != nil {
-		return nil, err
-	}
+	recentInfo := fn.fms.getFileInfo(name)
 	if recentInfo == nil {
 		return nil, nil
 	}
@@ -986,7 +987,7 @@ func (fn *FolderNode) isInCounter(tx *sql.Tx, name string) bool {
 	finfo, err := os.Stat(name)
 	if err != nil {
 
-		if info.Deleted {
+		if os.IsNotExist(err) && info.Deleted {
 			return true
 		}
 
@@ -997,11 +998,20 @@ func (fn *FolderNode) isInCounter(tx *sql.Tx, name string) bool {
 		return true
 	}
 
-	if finfo.IsDir() && info.Type == bep.FileInfoType_DIRECTORY {
+	if finfo.IsDir() &&
+		info.Type == bep.FileInfoType_DIRECTORY &&
+		!info.Deleted {
 		return true
 	}
 
 	return false
+}
+
+// name relative
+func (fn *FolderNode) existFile(name string) bool {
+	filePath := filepath.Join(fn.realPath, name)
+	fe := fn.fl.findFile(filePath)
+	return fe != nil
 }
 
 func (fn *FolderNode) isRecordDelete(tx *sql.Tx, name string,

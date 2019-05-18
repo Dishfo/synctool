@@ -12,7 +12,7 @@ type FolderNodeProxy struct {
 	fileInfos []*bep.FileInfo
 }
 
-func (fp *FolderNodeProxy) StoreFileinfo(info *bep.FileInfo) {
+func (fp *FolderNodeProxy) StoreFileInfo(info *bep.FileInfo) {
 	if info == nil {
 		return
 	}
@@ -51,12 +51,12 @@ func (fp *FolderNodeProxy) TryCommit() error {
 	}
 
 	for _, info := range fp.fileInfos {
-
 		id, err := bep.StoreFileInfo(tx, fp.folderId, info)
 		if err != nil {
 			_ = tx.Rollback()
 			return err
 		}
+		fp.fn.cacheFileInfo(info)
 		infoIds = append(infoIds, id)
 	}
 

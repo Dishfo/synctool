@@ -134,7 +134,7 @@ func (sm *SyncManager) handleClusterConfig(remote node.DeviceId,
 	if err != nil {
 		panic(err)
 	}
-	log.Println("calculate relations ", relations)
+	//log.Println("calculate relations ", relations)
 
 	_ = tx.Commit()
 	sm.setNewRelation(oldRelations, relations)
