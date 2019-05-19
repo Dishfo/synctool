@@ -426,7 +426,7 @@ func newFileInfo(
 	//var hasMove bool
 	//var hasMoveTo bool
 	if fn.isInCounter(tx, l.Name) {
-		//	log.Println(l.Name,"  ","is in counter ")
+		log.Println(l.Name, "  ", "is in counter ")
 		fn.discardEvent(l.Name)
 		return make([]int64, 0), nil
 	}
@@ -481,37 +481,35 @@ func newFileInfo(
 			fn.onFileCreate(info)
 		}
 	} else {
-		//log.Println(filele)
-		if filele != nil {
-			if fn.isRecordDelete(tx, l.Name, laste.WrappedEvent) {
-				fn.discardEvent(l.Name)
-				//	log.Println("record delete clear")
-				return make([]int64, 0), nil
-			}
-
-			info, err := fn.generateDelFileInfo(folderId, name, laste.WrappedEvent, tx)
-			if err != nil {
-
-				return infoIds, err
-			}
-
-			if info == nil {
-				return infoIds, nil
-			}
-
-			c := LastCounter(info)
-			i := AllNsecond(info.ModifiedS, int64(info.ModifiedNs))
-			fn.counters.storeMap(c, i, i)
-			id, err := bep.StoreFileInfo(tx, fn.folderId, info)
-			fn.cacheFileInfo(info)
-
-			if err != nil {
-				return infoIds, err
-			}
-
-			fn.onFileDelete(info)
-			infoIds = append(infoIds, id)
+		log.Println(filele)
+		if fn.isRecordDelete(tx, l.Name, laste.WrappedEvent) {
+			fn.discardEvent(l.Name)
+			log.Println("record delete clear")
+			return make([]int64, 0), nil
 		}
+
+		info, err := fn.generateDelFileInfo(folderId, name, laste.WrappedEvent, tx)
+		if err != nil {
+
+			return infoIds, err
+		}
+
+		if info == nil {
+			return infoIds, nil
+		}
+
+		c := LastCounter(info)
+		i := AllNsecond(info.ModifiedS, int64(info.ModifiedNs))
+		fn.counters.storeMap(c, i, i)
+		id, err := bep.StoreFileInfo(tx, fn.folderId, info)
+		fn.cacheFileInfo(info)
+
+		if err != nil {
+			return infoIds, err
+		}
+
+		fn.onFileDelete(info)
+		infoIds = append(infoIds, id)
 	}
 
 	l.BackWard(laste)

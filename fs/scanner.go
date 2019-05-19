@@ -48,6 +48,7 @@ folderNode中的文件列表
 /**
 todo 对于文件夹相关的事件丢失暂时无法解决
 */
+
 func (fn *FolderNode) scanFolderTransaction() {
 	oldfiles := fn.fl.getItems()
 	files := GetSubFiles(fn.realPath)

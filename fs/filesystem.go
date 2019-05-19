@@ -260,7 +260,12 @@ func (fs *FileSystem) receiveEvent(folder string) {
 对于事件的缓存应该在单独的线程里,
 
 */
+func init() {
+
+}
+
 func (fs *FileSystem) handleEvents(folder string) {
+
 	fs.lock.Lock()
 	fn, ok := fs.folders[folder]
 	fs.lock.Unlock()

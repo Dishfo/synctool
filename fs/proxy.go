@@ -37,6 +37,7 @@ func (fp *FolderNodeProxy) StoreFileInfo(info *bep.FileInfo) {
 
 	fp.fn.counters.storeMap(c, real, record)
 	fp.fn.beforePushFileinfo(info)
+	//todo
 	fp.fileInfos = append(fp.fileInfos, info)
 }
 
