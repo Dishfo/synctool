@@ -1,7 +1,6 @@
 package fswatcher
 
 import (
-	"fmt"
 	"golang.org/x/sys/unix"
 	"log"
 	"testing"
@@ -79,8 +78,5 @@ func TestPoller(t *testing.T) {
 }
 
 func TestMapConcurrent(t *testing.T) {
-	x := []string{"a", "b", "c"}
-	for _, s := range x {
-		fmt.Prinw33t(s)
-	}
+
 }
